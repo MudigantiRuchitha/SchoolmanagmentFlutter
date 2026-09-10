@@ -1,0 +1,171 @@
+{
+  "info": {
+    "_postman_id": "a90dfb2c-297d-4c3e-8120-1e5b871c5000",
+    "name": "School Attendance API",
+    "description": "Postman Collection for testing the School Attendance Management Backend API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Device Validate User (Login)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "if (jsonData.Token) {",
+              "    pm.environment.set(\"auth_token\", jsonData.Token);",
+              "    pm.environment.set(\"teacher_id\", jsonData.objDeviceUserInfo.UserId);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"Username\": \"teacher\",\n  \"Password\": \"teacher123\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/api/Device/ValidateUser",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "api",
+            "Device",
+            "ValidateUser"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Get Classes (Device)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{auth_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/api/Device/GetUserClasses?UserId={{teacher_id}}",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "api",
+            "Device",
+            "GetUserClasses"
+          ],
+          "query": [
+            {
+              "key": "UserId",
+              "value": "{{teacher_id}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get Students (Device)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{auth_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/api/Device/GetStudents?ClassId=1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "api",
+            "Device",
+            "GetStudents"
+          ],
+          "query": [
+            {
+              "key": "ClassId",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Submit Attendance",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{auth_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"classId\": 1,\n  \"teacherId\": {{teacher_id}},\n  \"sessionDate\": \"2026-08-19\",\n  \"sessionTime\": \"10:00:00\",\n  \"totalStudents\": 5,\n  \"presentCount\": 4,\n  \"absentCount\": 1,\n  \"latitude\": 12.9715987,\n  \"longitude\": 77.5945627,\n  \"locationAddress\": \"Bengaluru, India\",\n  \"records\": [\n    { \"studentId\": 1, \"status\": \"present\", \"confidence\": 0.96, \"recognitionMethod\": \"face\" },\n    { \"studentId\": 2, \"status\": \"present\", \"confidence\": 0.92, \"recognitionMethod\": \"face\" },\n    { \"studentId\": 3, \"status\": \"present\", \"confidence\": 0.98, \"recognitionMethod\": \"face\" },\n    { \"studentId\": 4, \"status\": \"present\", \"confidence\": 0.94, \"recognitionMethod\": \"face\" },\n    { \"studentId\": 5, \"status\": \"absent\", \"recognitionMethod\": \"manual\" }\n  ],\n  \"imageUrls\": []\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/api/attendance/submit",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "api",
+            "attendance",
+            "submit"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

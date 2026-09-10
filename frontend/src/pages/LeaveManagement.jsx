@@ -1,0 +1,301 @@
+import { useState, useEffect } from 'react';
+import Layout from '../components/Layout';
+import Modal from '../components/Modal';
+import { getLeaves, applyLeave, updateLeave, deleteLeave, getLeaveTypes, createLeaveType, deleteLeaveType, getStaff } from '../api';
+import { MdAdd, MdCheck, MdClose, MdDelete, MdSearch, MdBeachAccess, MdFilterList, MdComment } from 'react-icons/md';
+import { format } from 'date-fns';
+
+export default function LeaveManagement() {
+  const [leaves, setLeaves] = useState([]);
+  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [search, setSearch] = useState('');
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewItem, setReviewItem] = useState(null);
+  const [reviewAction, setReviewAction] = useState('approved');
+  const [reviewComment, setReviewComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
+  const [form, setForm] = useState({ staffId: '', leaveTypeId: '', leaveTypeName: '', fromDate: '', toDate: '', reason: '' });
+  const [typeForm, setTypeForm] = useState({ name: '', maxDays: 1 });
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  useEffect(() => { fetchInit(); }, []);
+  const fetchInit = async () => {
+    setLoading(true);
+    try {
+      const [l, lt, s] = await Promise.all([getLeaves(), getLeaveTypes(), getStaff()]);
+      setLeaves(l.data.leaves);
+      setStats(l.data.stats);
+      setLeaveTypes(lt.data.leaveTypes);
+      setStaff(s.data.staff);
+    } catch {}
+    setLoading(false);
+  };
+
+  const fetchLeaves = async () => {
+    const params = {};
+    if (filterStatus) params.status = filterStatus;
+    try { const r = await getLeaves(params); setLeaves(r.data.leaves); setStats(r.data.stats); } catch {}
+  };
+
+  useEffect(() => { fetchLeaves(); }, [filterStatus]);
+
+  const handleApply = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const lt = leaveTypes.find(l => l.id == form.leaveTypeId);
+      await applyLeave({ ...form, leaveTypeName: lt?.name || '' });
+      showToast('Leave application submitted!'); 
+      setShowApplyModal(false);
+      setForm({ staffId: '', leaveTypeId: '', leaveTypeName: '', fromDate: '', toDate: '', reason: '' });
+      fetchInit();
+    } catch (err) { showToast(err.response?.data?.message || 'Error occurred.'); }
+    setSaving(false);
+  };
+
+  const openReviewModal = (leave, action) => {
+    setReviewItem(leave);
+    setReviewAction(action);
+    setReviewComment('');
+    setShowReviewModal(true);
+  };
+
+  const handleConfirmReview = async (e) => {
+    e.preventDefault();
+    if (!reviewItem) return;
+    setSaving(true);
+    try {
+      await updateLeave(reviewItem.id, { status: reviewAction, reviewComment });
+      showToast(`Leave application ${reviewAction}!`);
+      setShowReviewModal(false);
+      setReviewItem(null);
+      fetchLeaves();
+    } catch { showToast('Failed to update leave request.'); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this leave record?')) return;
+    try { await deleteLeave(id); showToast('Leave record deleted.'); fetchLeaves(); } catch { showToast('Failed to delete.'); }
+  };
+
+  const handleAddType = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try { 
+      await createLeaveType(typeForm); 
+      showToast('New leave type added!'); 
+      setTypeForm({ name: '', maxDays: 1 }); 
+      fetchInit(); 
+    } catch { showToast('Failed to add leave type.'); }
+    setSaving(false);
+  };
+
+  const handleDeleteType = async (id) => {
+    try {
+      await deleteLeaveType(id);
+      showToast('Leave type deleted.');
+      fetchInit();
+    } catch { showToast('Failed to delete leave type.'); }
+  };
+
+  const statusBadge = (status) => ({ pending: 'badge-warning', approved: 'badge-success', rejected: 'badge-danger' }[status] || 'badge-gray');
+
+  const filteredLeaves = leaves.filter(l => {
+    const matchesSearch = !search || 
+      (l.staff_name || '').toLowerCase().includes(search.toLowerCase()) || 
+      (l.reason || '').toLowerCase().includes(search.toLowerCase());
+    const matchesType = !filterType || l.leave_type_id == filterType;
+    return matchesSearch && matchesType;
+  });
+
+  return (
+    <Layout title="Leave Management" subtitle="Review staff leave applications, approve/reject requests, and configure leave types">
+      {toast && <div className="alert alert-success">✅ {toast}</div>}
+
+      {/* Stats Cards */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Total Requests', value: stats.total || 0, color: 'var(--primary)', bg: '#eff6ff' },
+          { label: 'Pending', value: stats.pending || 0, color: 'var(--warning)', bg: '#fffbeb' },
+          { label: 'Approved', value: stats.approved || 0, color: 'var(--success)', bg: '#f0fdf4' },
+          { label: 'Rejected', value: stats.rejected || 0, color: 'var(--danger)', bg: '#fef2f2' },
+        ].map(s => (
+          <div key={s.label} className="stat-card" style={{ flex: 1, padding: '16px' }}>
+            <div className="stat-icon" style={{ background: s.bg, width: 44, height: 44 }}><MdBeachAccess color={s.color} size={20} /></div>
+            <div className="stat-info">
+              <div className="stat-value" style={{ color: s.color, fontSize: 22 }}>{s.value}</div>
+              <div className="stat-label">{s.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="toolbar">
+        <div className="toolbar-left">
+          <div className="search-box">
+            <MdSearch color="var(--text-muted)" />
+            <input 
+              placeholder="Search by staff name..." 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+            />
+          </div>
+
+          <select className="input" style={{ width: 140, padding: '9px 10px', fontSize: 13 }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+
+          <select className="input" style={{ width: 160, padding: '9px 10px', fontSize: 13 }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <option value="">All Leave Types</option>
+            {leaveTypes.map(lt => <option key={lt.id} value={lt.id}>{lt.name}</option>)}
+          </select>
+        </div>
+
+        <div className="toolbar-right">
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowTypeModal(true)}>⚙️ Manage Leave Types</button>
+          <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}><MdAdd /> Apply Leave</button>
+        </div>
+      </div>
+
+      {loading ? <div className="loading-overlay"><div className="spinner" /> Loading leave requests...</div> : (
+        <div className="table-container">
+          <table>
+            <thead><tr><th>Staff Member</th><th>Leave Type</th><th>From Date</th><th>To Date</th><th>Days</th><th>Reason</th><th>Status</th><th>Review Details</th><th>Actions</th></tr></thead>
+            <tbody>
+              {filteredLeaves.length === 0 ? (
+                <tr><td colSpan={9}><div className="empty-state"><div className="empty-state-icon"><MdBeachAccess /></div><div className="empty-state-title">No leave requests found</div></div></td></tr>
+              ) : filteredLeaves.map(l => (
+                <tr key={l.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{l.staff_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.role_type} ({l.branch_name || 'Main'})</div>
+                  </td>
+                  <td style={{ fontSize: 13 }}>{l.leave_type_name || '—'}</td>
+                  <td style={{ fontSize: 13 }}>{l.from_date ? format(new Date(l.from_date), 'dd MMM yyyy') : '—'}</td>
+                  <td style={{ fontSize: 13 }}>{l.to_date ? format(new Date(l.to_date), 'dd MMM yyyy') : '—'}</td>
+                  <td><span className="badge badge-info">{l.total_days} day{l.total_days > 1 ? 's' : ''}</span></td>
+                  <td style={{ fontSize: 13, maxWidth: 180 }} className="truncate" title={l.reason}>{l.reason || '—'}</td>
+                  <td><span className={`badge ${statusBadge(l.status)}`}>{l.status}</span></td>
+                  <td style={{ fontSize: 12 }}>
+                    {l.reviewed_by_name && <div>By: {l.reviewed_by_name}</div>}
+                    {l.review_comment && <div style={{ color: 'var(--text-muted)' }}>"{l.review_comment}"</div>}
+                    {!l.reviewed_by_name && !l.review_comment && <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {l.status === 'pending' && (
+                        <>
+                          <button className="btn btn-sm btn-success" onClick={() => openReviewModal(l, 'approved')} title="Approve Leave"><MdCheck size={14} /></button>
+                          <button className="btn btn-sm btn-danger" onClick={() => openReviewModal(l, 'rejected')} title="Reject Leave"><MdClose size={14} /></button>
+                        </>
+                      )}
+                      <button className="btn btn-sm" style={{ background: '#f1f5f9', color: '#64748b' }} onClick={() => handleDelete(l.id)} title="Delete Request"><MdDelete size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Apply Leave Modal */}
+      <Modal isOpen={showApplyModal} onClose={() => setShowApplyModal(false)} title="Apply for Staff Leave"
+        footer={<><button className="btn btn-secondary" onClick={() => setShowApplyModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleApply} disabled={saving}>{saving ? 'Submitting...' : 'Submit Leave'}</button></>}>
+        <form onSubmit={handleApply}>
+          <div className="form-group"><label>Staff Member *</label>
+            <select className="input" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
+              <option value="">Select Staff</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.role_type})</option>)}
+            </select>
+          </div>
+          <div className="form-group"><label>Leave Type</label>
+            <select className="input" value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: e.target.value })}>
+              <option value="">Select Leave Type</option>
+              {leaveTypes.map(lt => <option key={lt.id} value={lt.id}>{lt.name} (Max {lt.max_days} days)</option>)}
+            </select>
+          </div>
+          <div className="form-row">
+            <div className="form-group"><label>From Date *</label><input className="input" type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} required /></div>
+            <div className="form-group"><label>To Date *</label><input className="input" type="date" min={form.fromDate} value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} required /></div>
+          </div>
+          <div className="form-group"><label>Reason for Leave</label><textarea className="input" placeholder="Enter reason for leave..." value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} rows={3} /></div>
+        </form>
+      </Modal>
+
+      {/* Review Leave Modal (Approve / Reject with Comment) */}
+      <Modal isOpen={showReviewModal} onClose={() => setShowReviewModal(false)} title={`${reviewAction === 'approved' ? 'Approve' : 'Reject'} Leave Request`} size="sm"
+        footer={<><button className="btn btn-secondary" onClick={() => setShowReviewModal(false)}>Cancel</button><button className={`btn ${reviewAction === 'approved' ? 'btn-success' : 'btn-danger'}`} onClick={handleConfirmReview} disabled={saving}>{saving ? 'Processing...' : `Confirm ${reviewAction === 'approved' ? 'Approval' : 'Rejection'}`}</button></>}>
+        <form onSubmit={handleConfirmReview}>
+          <p style={{ fontSize: 13, marginBottom: 12 }}>
+            Staff: <strong>{reviewItem?.staff_name}</strong> ({reviewItem?.total_days} days leave from {reviewItem?.from_date ? format(new Date(reviewItem.from_date), 'dd MMM') : ''} to {reviewItem?.to_date ? format(new Date(reviewItem.to_date), 'dd MMM') : ''})
+          </p>
+          <div className="form-group">
+            <label>Approval / Rejection Comment (Optional)</label>
+            <textarea className="input" placeholder="e.g. Approved by Principal / Documentation required" value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={3} />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Manage Leave Types Modal */}
+      <Modal isOpen={showTypeModal} onClose={() => setShowTypeModal(false)} title="Manage Organisation Leave Types" size="lg"
+        footer={<button className="btn btn-secondary" onClick={() => setShowTypeModal(false)}>Close</button>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <form onSubmit={handleAddType} style={{ background: 'var(--bg)', padding: 16, borderRadius: 'var(--radius-sm)' }}>
+            <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Add New Leave Type</h4>
+            <div className="form-row">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Type Name *</label>
+                <input className="input" placeholder="e.g. Casual Leave, Sabbatical" value={typeForm.name} onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })} required />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Max Days Allowed</label>
+                <input className="input" type="number" min={1} value={typeForm.maxDays} onChange={(e) => setTypeForm({ ...typeForm, maxDays: parseInt(e.target.value) || 1 })} />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} disabled={saving}>
+              {saving ? 'Adding...' : '+ Add Leave Type'}
+            </button>
+          </form>
+
+          <div>
+            <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Existing Leave Types</h4>
+            {leaveTypes.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No custom leave types created yet.</div>
+            ) : (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+                <table>
+                  <thead><tr><th>Name</th><th>Max Days</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {leaveTypes.map(lt => (
+                      <tr key={lt.id}>
+                        <td style={{ fontWeight: 600, fontSize: 13 }}>{lt.name}</td>
+                        <td style={{ fontSize: 13 }}>{lt.max_days} days</td>
+                        <td>
+                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteType(lt.id)} title="Delete"><MdDelete size={14} /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
+    </Layout>
+  );
+}
