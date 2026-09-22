@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import { useAuth } from '../context/AuthContext';
+import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
+import ClassSectionSelect from '../components/ClassSectionSelect';
 import { getStudents, createStudent, updateStudent, deleteStudent, getBranches, getClasses, bulkImportStudents } from '../api';
 import { 
   MdAdd, MdEdit, MdDelete, MdSearch, MdPersonAdd, MdDownload, MdUpload,
@@ -14,12 +17,13 @@ const emptyForm = {
 };
 
 export default function Students() {
+  const { user } = useAuth();
   const [students, setStudents] = useState([]);
   const [branches, setBranches] = useState([]);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterBranch, setFilterBranch] = useState('');
+  const [filterBranch, setFilterBranch] = useState(getBranchScope);
   const [filterClass, setFilterClass] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   
@@ -48,6 +52,11 @@ export default function Students() {
 
   const [toast, setToast] = useState('');
 
+  const filterBranchScoped = (items) => {
+    if (!user?.branchAccess || user.branchAccess === 'all') return items;
+    return items.filter(item => String(item.branch_id) === String(user.branchAccess));
+  };
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   useEffect(() => { fetchInit(); }, []);
@@ -68,8 +77,8 @@ export default function Students() {
     setLoading(true);
     try {
       const [s, b] = await Promise.all([getStudents(), getBranches()]);
-      setStudents(s.data.students || []);
-      setBranches(b.data.branches || []);
+      setStudents(filterBranchScoped(s.data.students || []));
+      setBranches(filterBranches(b.data.branches || []));
     } catch {}
     setLoading(false);
   };
@@ -80,7 +89,7 @@ export default function Students() {
     if (filterClass) params.class_id = filterClass;
     if (filterStatus) params.status = filterStatus;
     if (search) params.search = search;
-    try { const r = await getStudents(params); setStudents(r.data.students || []); } catch {}
+    try { const r = await getStudents(params); setStudents(filterBranchScoped(r.data.students || [])); } catch {}
   };
 
   useEffect(() => { fetchStudents(); }, [filterBranch, filterClass, filterStatus]);
@@ -228,19 +237,29 @@ export default function Students() {
   };
 
   const exportCSV = () => {
-    if (students.length === 0) return;
-    const headers = ['Admission No', 'Roll No', 'First Name', 'Last Name', 'Full Name', 'Class', 'Section', 'Branch', 'Assigned Staff', 'Gender', 'Parent Name', 'Parent Phone', 'Student Phone', 'Status'];
-    const rows = students.map(s => [
-      s.admission_no || '', s.roll_no || '', `"${s.first_name || ''}"`, `"${s.last_name || ''}"`, `"${s.full_name}"`, `"${s.class_name || ''}"`, `"${s.section || ''}"`, `"${s.branch_name || ''}"`, `"${s.teacher_name || ''}"`, s.gender || '', `"${s.parent_name || ''}"`, s.parent_phone || '', s.phone || '', s.is_active ? 'Active' : 'Inactive'
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `students_list_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      if (!students || students.length === 0) {
+        showToast('No rows to export. There are no student records available.');
+        return;
+      }
+
+      const headers = ['Admission No', 'Roll No', 'First Name', 'Last Name', 'Full Name', 'Class', 'Section', 'Branch', 'Assigned Staff', 'Gender', 'Parent Name', 'Parent Phone', 'Student Phone', 'Status'];
+      const rows = students.map(s => [
+        s.admission_no || '', s.roll_no || '', `"${s.first_name || ''}"`, `"${s.last_name || ''}"`, `"${s.full_name}"`, `"${s.class_name || ''}"`, `"${s.section || ''}"`, `"${s.branch_name || ''}"`, `"${s.teacher_name || ''}"`, s.gender || '', `"${s.parent_name || ''}"`, s.parent_phone || '', s.phone || '', s.is_active ? 'Active' : 'Inactive'
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `students_list_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Student CSV exported successfully.');
+    } catch (error) {
+      console.error('Student CSV export failed:', error);
+      showToast('CSV export failed. Please try again.');
+    }
   };
 
   const downloadSampleCSV = () => {
@@ -335,33 +354,33 @@ export default function Students() {
 
   return (
     <Layout title="Students" subtitle="Manage student enrollment, profiles, and academic records">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Top Stats Cards */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}>🎓</div>
+          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}><MdPersonAdd /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.total}</div>
             <div className="stat-label">Total Students</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}>✅</div>
+          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}><MdCheckCircle /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#10b981' }}>{stats.active}</div>
             <div className="stat-label">Active Students</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fefce8', color: '#eab308' }}>👦</div>
+          <div className="stat-icon" style={{ background: '#fefce8', color: '#eab308' }}><MdPerson /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#eab308' }}>{stats.male}</div>
             <div className="stat-label">Male Students</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}>👧</div>
+          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}><MdPerson /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#a855f7' }}>{stats.female}</div>
             <div className="stat-label">Female Students</div>
@@ -381,14 +400,19 @@ export default function Students() {
             />
           </div>
           <select className="input" style={{ width: 120, padding: '6px 8px', fontSize: 12.5, height: 36 }} value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)}>
-            <option value="">All Branches</option>
+            {!isDedicatedBranchUser() && <option value="">All Branches</option>}
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
           {classes.length > 0 && (
-            <select className="input" style={{ width: 115, padding: '6px 8px', fontSize: 12.5, height: 36 }} value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
-              <option value="">All Classes</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.section}</option>)}
-            </select>
+              <ClassSectionSelect
+                classes={classes}
+                value={filterClass}
+                onChange={setFilterClass}
+                includeAll
+                style={{ gap: 4 }}
+                classStyle={{ width: 115, padding: '6px 8px', fontSize: 12.5, height: 36 }}
+                sectionStyle={{ width: 105, padding: '6px 8px', fontSize: 12.5, height: 36 }}
+              />
           )}
           <select className="input" style={{ width: 100, padding: '6px 8px', fontSize: 12.5, height: 36 }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All Status</option>
@@ -469,17 +493,7 @@ export default function Students() {
                     </td>
                     <td>
                       <div className="table-actions">
-                        <button className="btn btn-sm btn-secondary" onClick={() => openDetail(s)} title="View Profile"><MdVisibility size={14} /></button>
-                        <button className="btn btn-sm btn-secondary" onClick={() => openEdit(s)} title="Edit Student"><MdEdit size={14} /></button>
-                        <button 
-                          className="btn btn-sm" 
-                          onClick={() => handleToggleStatus(s)} 
-                          title={s.is_active ? 'Deactivate' : 'Activate'}
-                          style={{ background: s.is_active ? '#fef3c7' : '#dcfce7', color: s.is_active ? '#d97706' : '#15803d' }}
-                        >
-                          {s.is_active ? <MdCancel size={14} /> : <MdCheckCircle size={14} />}
-                        </button>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s)} title="Delete Student"><MdDelete size={14} /></button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => openDetail(s)} title="View student details and actions"><MdVisibility size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -517,7 +531,7 @@ export default function Students() {
                 style={{ borderColor: fieldErrors.firstName ? '#ef4444' : '' }}
                 required 
               />
-              {fieldErrors.firstName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.firstName}</div>}
+              {fieldErrors.firstName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.firstName}</div>}
             </div>
             <div className="form-group">
               <label>Last Name *</label>
@@ -529,7 +543,7 @@ export default function Students() {
                 style={{ borderColor: fieldErrors.lastName ? '#ef4444' : '' }}
                 required 
               />
-              {fieldErrors.lastName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.lastName}</div>}
+              {fieldErrors.lastName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.lastName}</div>}
             </div>
           </div>
 
@@ -543,7 +557,7 @@ export default function Students() {
                 onChange={(e) => { setForm({ ...form, admissionNo: e.target.value }); setFieldErrors({ ...fieldErrors, admissionNo: '' }); }} 
                 style={{ fontFamily: 'monospace', borderColor: fieldErrors.admissionNo ? '#ef4444' : '' }} 
               />
-              {fieldErrors.admissionNo && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.admissionNo}</div>}
+              {fieldErrors.admissionNo && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.admissionNo}</div>}
             </div>
             <div className="form-group">
               <label>Roll No *</label>
@@ -554,24 +568,28 @@ export default function Students() {
                 onChange={(e) => { setForm({ ...form, rollNo: e.target.value }); setFieldErrors({ ...fieldErrors, rollNo: '' }); }} 
                 style={{ borderColor: fieldErrors.rollNo ? '#ef4444' : '' }}
               />
-              {fieldErrors.rollNo && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.rollNo}</div>}
+              {fieldErrors.rollNo && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.rollNo}</div>}
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
               <label>Branch</label>
-              <select className="input" value={formBranch} onChange={(e) => { setFormBranch(e.target.value); setForm({ ...form, branchId: e.target.value, classId: '' }); }}>
-                <option value="">Select Branch</option>
+              <select className="input" value={formBranch || getBranchScope()} onChange={(e) => { setFormBranch(e.target.value); setForm({ ...form, branchId: e.target.value, classId: '' }); }} disabled={isDedicatedBranchUser()}>
+                {!isDedicatedBranchUser() && <option value="">Select Branch</option>}
                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Class & Section</label>
-              <select className="input" value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}>
-                <option value="">Select Class</option>
-                {formClasses.map(c => <option key={c.id} value={c.id}>{c.name} {c.section}</option>)}
-              </select>
+              <label>Class and Section</label>
+              <ClassSectionSelect
+                classes={formClasses}
+                value={form.classId}
+                onChange={(classId) => setForm({ ...form, classId })}
+                style={{ width: '100%' }}
+                classStyle={{ flex: 1 }}
+                sectionStyle={{ flex: 1 }}
+              />
             </div>
           </div>
 
@@ -598,7 +616,7 @@ export default function Students() {
                 onChange={(e) => { setForm({ ...form, phone: e.target.value }); setFieldErrors({ ...fieldErrors, phone: '' }); }} 
                 style={{ borderColor: fieldErrors.phone ? '#ef4444' : '' }}
               />
-              {fieldErrors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.phone}</div>}
+              {fieldErrors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.phone}</div>}
             </div>
           </div>
 
@@ -616,7 +634,7 @@ export default function Students() {
                 onChange={(e) => { setForm({ ...form, parentPhone: e.target.value }); setFieldErrors({ ...fieldErrors, parentPhone: '' }); }} 
                 style={{ borderColor: fieldErrors.parentPhone ? '#ef4444' : '' }}
               />
-              {fieldErrors.parentPhone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.parentPhone}</div>}
+              {fieldErrors.parentPhone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.parentPhone}</div>}
             </div>
           </div>
 
@@ -748,8 +766,8 @@ export default function Students() {
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div><strong>Designation:</strong> {st.designation || 'Class Teacher'}</div>
                     {st.role_type && <div><strong>Role:</strong> <span className="badge badge-info">{st.role_type}</span></div>}
-                    {st.phone && <div><strong>Phone:</strong> 📞 {st.phone}</div>}
-                    {st.email && <div><strong>Email:</strong> ✉️ {st.email}</div>}
+                    {st.phone && <div><strong>Phone:</strong> <MdPerson style={{ verticalAlign: 'middle', marginRight: 4 }} /> {st.phone}</div>}
+                    {st.email && <div><strong>Email:</strong> <MdPerson style={{ verticalAlign: 'middle', marginRight: 4 }} /> {st.email}</div>}
                   </div>
                 </div>
               ))}
@@ -788,6 +806,11 @@ export default function Students() {
               <div><strong>Parent Phone:</strong> {selectedStudent.parent_phone || '—'}</div>
               <div><strong>Student Phone:</strong> {selectedStudent.phone || '—'}</div>
               <div><strong>Status:</strong> <span className={`badge ${selectedStudent.is_active ? 'badge-success' : 'badge-danger'}`}>{selectedStudent.is_active ? 'Active' : 'Inactive'}</span></div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <button className="btn btn-secondary" onClick={() => { setShowDetailModal(false); openEdit(selectedStudent); }}><MdEdit /> Edit Student</button>
+              <button className="btn" onClick={() => handleToggleStatus(selectedStudent)} style={{ background: selectedStudent.is_active ? '#fef3c7' : '#dcfce7', color: selectedStudent.is_active ? '#d97706' : '#15803d' }}><MdCancel /> {selectedStudent.is_active ? 'Deactivate Student' : 'Activate Student'}</button>
+              <button className="btn btn-danger" onClick={() => { setShowDetailModal(false); handleDelete(selectedStudent); }}><MdDelete /> Delete Student</button>
             </div>
           </div>
         )}

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import { useAuth } from '../context/AuthContext';
 import { getBranches, createBranch, updateBranch, deleteBranch, getBranchDetails } from '../api';
 import { 
   MdAdd, MdEdit, MdDelete, MdBusiness, MdSearch, MdPhone, MdEmail, 
   MdPerson, MdCheckCircle, MdCancel, MdVisibility, MdDownload, MdFilterList, 
-  MdLocationOn, MdGpsFixed, MdAdminPanelSettings, MdLock
+  MdLocationOn, MdGpsFixed, MdAdminPanelSettings, MdLock, MdSchool, MdPeople
 } from 'react-icons/md';
 
 const emptyForm = { 
@@ -15,6 +16,7 @@ const emptyForm = {
 };
 
 export default function Branches() {
+  const { user } = useAuth();
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -27,8 +29,14 @@ export default function Branches() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [formError, setFormError] = useState('');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+  const isDedicatedBranchUser = Boolean(user?.branchAccess && user.branchAccess !== 'all');
+  const filterBranchScoped = (items) => {
+    if (!isDedicatedBranchUser) return items;
+    return items.filter(branch => String(branch.id) === String(user.branchAccess));
+  };
 
   useEffect(() => { fetchBranches(); }, [filterStatus]);
 
@@ -39,7 +47,7 @@ export default function Branches() {
       if (filterStatus) params.status = filterStatus;
       if (search) params.search = search;
       const r = await getBranches(params);
-      setBranches(r.data.branches);
+      setBranches(filterBranchScoped(r.data.branches || []));
     } catch {}
     setLoading(false);
   };
@@ -51,14 +59,35 @@ export default function Branches() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      showToast('Branch Name is required!');
+    const requiredFields = [
+      ['Branch Name', form.name],
+      ['Branch Code', form.code],
+      ['Contact Person', form.contactPerson],
+      ['Phone Number', form.phone],
+      ['Email Address', form.email],
+    ];
+    const missingField = requiredFields.find(([, value]) => !String(value || '').trim());
+    if (missingField) {
+      setFormError(`${missingField[0]} is required.`);
       return;
     }
-    if (!editItem && (!form.adminUsername.trim() || !form.adminPassword.trim())) {
-      showToast('Admin Username and Password are required for branch creation!');
+    if (!/^\d+$/.test(form.phone)) {
+      setFormError('Phone Number must contain numbers only.');
       return;
     }
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) {
+      setFormError('Enter a valid Email Address.');
+      return;
+    }
+    if (!editItem && form.createBranchAdmin && (!form.adminUsername.trim() || !form.adminPassword.trim() || !form.adminFullName.trim() || !form.adminEmail.trim())) {
+      setFormError('Admin Username, Password, Full Name and Email are required when creating a branch admin.');
+      return;
+    }
+    if (!editItem && form.createBranchAdmin && !/^\S+@\S+\.\S+$/.test(form.adminEmail)) {
+      setFormError('Enter a valid Admin Email.');
+      return;
+    }
+    setFormError('');
     setSaving(true);
     try {
       if (editItem) { 
@@ -76,8 +105,8 @@ export default function Branches() {
       setEditItem(null); 
       setForm(emptyForm); 
       fetchBranches();
-    } catch (err) { 
-      showToast(err.response?.data?.message || 'Error occurred while saving branch.'); 
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Error occurred while saving branch.');
     }
     setSaving(false);
   };
@@ -105,6 +134,7 @@ export default function Branches() {
 
   const openEdit = (b) => {
     setEditItem(b);
+    setFormError('');
     setForm({
       name: b.name,
       code: b.code || '',
@@ -139,19 +169,29 @@ export default function Branches() {
   };
 
   const exportCSV = () => {
-    if (branches.length === 0) return;
-    const headers = ['ID', 'Branch Name', 'Code', 'Contact Person', 'Phone', 'Email', 'Address', 'Latitude', 'Longitude', 'Geofence Radius (m)', 'Students', 'Staff', 'Status'];
-    const rows = branches.map(b => [
-      b.id, `"${b.name}"`, b.code || '', `"${b.contact_person || ''}"`, b.phone || '', b.email || '', `"${b.address || ''}"`, b.latitude || '', b.longitude || '', b.geofence_radius || 100, b.student_count, b.staff_count, b.is_active ? 'Active' : 'Inactive'
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `branches_list_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      if (!branches || branches.length === 0) {
+        showToast('No rows to export. There are no branch records available.');
+        return;
+      }
+
+      const headers = ['ID', 'Branch Name', 'Code', 'Contact Person', 'Phone', 'Email', 'Address', 'Latitude', 'Longitude', 'Geofence Radius (m)', 'Students', 'Staff', 'Status'];
+      const rows = branches.map(b => [
+        b.id, `"${b.name}"`, b.code || '', `"${b.contact_person || ''}"`, b.phone || '', b.email || '', `"${b.address || ''}"`, b.latitude || '', b.longitude || '', b.geofence_radius || 100, b.student_count, b.staff_count, b.is_active ? 'Active' : 'Inactive'
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `branches_list_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Branch CSV exported successfully.');
+    } catch (error) {
+      console.error('Branch CSV export failed:', error);
+      showToast('CSV export failed. Please try again.');
+    }
   };
 
   const filtered = branches.filter(b =>
@@ -172,40 +212,40 @@ export default function Branches() {
 
   return (
     <Layout title="Branches" subtitle="Manage campus locations, geofencing GPS coordinates, and branch administrators">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Top Stats Cards */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}>🏢</div>
+          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}><MdBusiness /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.total}</div>
             <div className="stat-label">Total Branches</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}>✅</div>
+          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}><MdCheckCircle /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#10b981' }}>{stats.active}</div>
             <div className="stat-label">Active Branches</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fef2f2', color: '#ef4444' }}>⚠️</div>
+          <div className="stat-icon" style={{ background: '#fef2f2', color: '#ef4444' }}><MdCancel /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#ef4444' }}>{stats.inactive}</div>
             <div className="stat-label">Inactive Branches</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}>🎓</div>
+          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}><MdSchool /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#a855f7' }}>{stats.totalStudents}</div>
             <div className="stat-label">Total Students</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fff7ed', color: '#f97316' }}>👥</div>
+          <div className="stat-icon" style={{ background: '#fff7ed', color: '#f97316' }}><MdPeople /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#f97316' }}>{stats.totalStaff}</div>
             <div className="stat-label">Total Staff</div>
@@ -245,9 +285,11 @@ export default function Branches() {
           <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export to CSV">
             <MdDownload /> Export CSV
           </button>
-          <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditItem(null); setShowModal(true); }}>
-            <MdAdd /> Add Branch
-          </button>
+          {!isDedicatedBranchUser && (
+            <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setFormError(''); setEditItem(null); setShowModal(true); }}>
+              <MdAdd /> Add Branch
+            </button>
+          )}
         </div>
       </div>
 
@@ -286,7 +328,7 @@ export default function Branches() {
                 <tr key={b.id}>
                   <td>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{b.name}</div>
-                    {b.address && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>📍 {b.address.slice(0, 35)}{b.address.length > 35 ? '...' : ''}</div>}
+                    {b.address && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}><MdLocationOn style={{ verticalAlign: 'middle', marginRight: 4 }} /> {b.address.slice(0, 35)}{b.address.length > 35 ? '...' : ''}</div>}
                   </td>
                   <td>
                     <span style={{ fontFamily: 'monospace', background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 700 }}>
@@ -297,8 +339,8 @@ export default function Branches() {
                     <div style={{ fontWeight: 500 }}>{b.contact_person || '—'}</div>
                   </td>
                   <td>
-                    {b.phone && <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>📞 {b.phone}</div>}
-                    {b.email && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>✉️ {b.email}</div>}
+                    {b.phone && <div style={{ fontSize: 12, color: 'var(--text-primary)' }}><MdPhone style={{ verticalAlign: 'middle', marginRight: 4 }} /> {b.phone}</div>}
+                    {b.email && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}><MdEmail style={{ verticalAlign: 'middle', marginRight: 4 }} /> {b.email}</div>}
                     {!b.phone && !b.email && <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
                   <td>
@@ -321,22 +363,8 @@ export default function Branches() {
                   </td>
                   <td>
                     <div className="table-actions">
-                      <button className="btn btn-sm btn-secondary" onClick={() => openDetails(b)} title="View Branch Details">
+                      <button className="btn btn-sm btn-secondary" onClick={() => openDetails(b)} title="View branch details">
                         <MdVisibility size={14} />
-                      </button>
-                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(b)} title="Edit Branch">
-                        <MdEdit size={14} />
-                      </button>
-                      <button 
-                        className="btn btn-sm" 
-                        onClick={() => handleToggleStatus(b)} 
-                        title={b.is_active ? 'Deactivate Branch' : 'Activate Branch'}
-                        style={{ background: b.is_active ? '#fef3c7' : '#dcfce7', color: b.is_active ? '#d97706' : '#15803d' }}
-                      >
-                        {b.is_active ? <MdCancel size={14} /> : <MdCheckCircle size={14} />}
-                      </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(b)} title="Delete Branch">
-                        <MdDelete size={14} />
                       </button>
                     </div>
                   </td>
@@ -350,7 +378,7 @@ export default function Branches() {
       {/* Add / Edit Branch Modal */}
       <Modal
         isOpen={showModal}
-        onClose={() => { setShowModal(false); setEditItem(null); }}
+        onClose={() => { setShowModal(false); setFormError(''); setEditItem(null); }}
         title={editItem ? `Edit Branch: ${editItem.name}` : 'Add New Branch'}
         size="lg"
         footer={
@@ -363,6 +391,7 @@ export default function Branches() {
         }
       >
         <form onSubmit={handleSubmit}>
+          {formError && <div className="alert alert-danger" style={{ marginBottom: 16, color: '#b91c1c' }}>{formError}</div>}
           {/* Basic Info */}
           <div className="form-row">
             <div className="form-group">
@@ -370,24 +399,24 @@ export default function Branches() {
               <input className="input" placeholder="e.g. Main Campus, North Branch" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div className="form-group">
-              <label>Branch Code</label>
+              <label>Branch Code *</label>
               <input className="input" placeholder="e.g. MAIN, NORTH" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} style={{ fontFamily: 'monospace' }} />
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label>Contact Person</label>
+              <label>Contact Person *</label>
               <input className="input" placeholder="Contact person name" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>Phone Number</label>
-              <input className="input" placeholder="+91-XXXXXXXXXX" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <label>Phone Number *</label>
+              <input className="input" type="tel" inputMode="numeric" pattern="[0-9]+" placeholder="9876543210" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} required />
             </div>
           </div>
 
           <div className="form-group">
-            <label>Email Address</label>
+            <label>Email Address *</label>
             <input className="input" type="email" placeholder="branch@school.edu.in" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
 
@@ -447,12 +476,12 @@ export default function Branches() {
                   </div>
                   <div className="form-row">
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label>Admin Full Name</label>
+                      <label>Admin Full Name *</label>
                       <input className="input" placeholder="Admin full name" value={form.adminFullName} onChange={(e) => setForm({ ...form, adminFullName: e.target.value })} />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label>Admin Email</label>
-                      <input className="input" type="email" placeholder="admin@branch.com" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} />
+                      <label>Admin Email *</label>
+                      <input className="input" type="email" placeholder="admin@branch.com" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} required={form.createBranchAdmin} />
                     </div>
                   </div>
                 </div>
@@ -498,12 +527,18 @@ export default function Branches() {
               <div style={{ gridColumn: '1 / -1' }}><strong>Address:</strong> {selectedDetails.branch.address || '—'}</div>
             </div>
 
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button className="btn btn-secondary" onClick={() => { setShowDetailsModal(false); openEdit(selectedDetails.branch); }}><MdEdit /> Edit Branch</button>
+              <button className="btn" onClick={() => handleToggleStatus(selectedDetails.branch)} style={{ background: selectedDetails.branch.is_active ? '#fef3c7' : '#dcfce7', color: selectedDetails.branch.is_active ? '#d97706' : '#15803d' }}><MdCancel /> {selectedDetails.branch.is_active ? 'Deactivate Branch' : 'Activate Branch'}</button>
+              <button className="btn btn-danger" onClick={() => { setShowDetailsModal(false); handleDelete(selectedDetails.branch); }}><MdDelete /> Delete Branch</button>
+            </div>
+
             {/* Quick summary badges */}
             <div style={{ display: 'flex', gap: 12 }}>
-              <span className="badge badge-purple" style={{ padding: '6px 12px', fontSize: 13 }}>📚 {selectedDetails.classes?.length || 0} Classes</span>
-              <span className="badge badge-success" style={{ padding: '6px 12px', fontSize: 13 }}>👨‍🏫 {selectedDetails.staff?.length || 0} Staff Members</span>
-              <span className="badge badge-info" style={{ padding: '6px 12px', fontSize: 13 }}>🎓 {selectedDetails.students?.length || 0} Sample Students</span>
-              <span className="badge badge-warning" style={{ padding: '6px 12px', fontSize: 13 }}>🛡️ {selectedDetails.admins?.length || 0} Branch Admins</span>
+              <span className="badge badge-purple" style={{ padding: '6px 12px', fontSize: 13 }}><MdSchool style={{ verticalAlign: 'middle', marginRight: 4 }} /> {selectedDetails.classes?.length || 0} Classes</span>
+              <span className="badge badge-success" style={{ padding: '6px 12px', fontSize: 13 }}><MdPeople style={{ verticalAlign: 'middle', marginRight: 4 }} /> {selectedDetails.staff?.length || 0} Staff Members</span>
+              <span className="badge badge-info" style={{ padding: '6px 12px', fontSize: 13 }}><MdSchool style={{ verticalAlign: 'middle', marginRight: 4 }} /> {selectedDetails.students?.length || 0} Sample Students</span>
+              <span className="badge badge-warning" style={{ padding: '6px 12px', fontSize: 13 }}><MdAdminPanelSettings style={{ verticalAlign: 'middle', marginRight: 4 }} /> {selectedDetails.admins?.length || 0} Branch Admins</span>
             </div>
 
             {/* Branch Admins */}

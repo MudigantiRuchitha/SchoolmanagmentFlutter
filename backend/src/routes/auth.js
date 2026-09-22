@@ -41,7 +41,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT
     const token = jwt.sign(
-      { adminId: user.id, orgId: org.id, orgCode: org.code, username: user.username, role: user.role },
+      { adminId: user.id, orgId: org.id, orgCode: org.code, username: user.username, role: user.role, branchAccess: user.branch_access || 'all' },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -55,6 +55,7 @@ router.post('/login', async (req, res) => {
         fullName: user.full_name,
         email: user.email,
         role: user.role,
+        branchAccess: user.branch_access || 'all',
       },
       org: {
         id: org.id,
@@ -112,7 +113,14 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
     const user = userResult.rows[0];
     delete user.password_hash;
-    res.json({ success: true, user });
+    res.json({
+      success: true,
+      user: {
+        ...user,
+        fullName: user.full_name,
+        branchAccess: user.branch_access || 'all'
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
   }

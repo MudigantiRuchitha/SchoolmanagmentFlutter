@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import { getBranchGroups, createBranchGroup, updateBranchGroup, deleteBranchGroup, getBranches } from '../api';
 import { MdAdd, MdEdit, MdDelete, MdWorkspaces } from 'react-icons/md';
+import { filterBranches } from '../utils/branchScope';
 
 const emptyForm = { name: '', branchIds: [] };
 
@@ -24,7 +25,7 @@ export default function BranchGroups() {
     try {
       const [g, b] = await Promise.all([getBranchGroups(), getBranches()]);
       setGroups(g.data.groups);
-      setBranches(b.data.branches);
+      setBranches(filterBranches(b.data.branches || []));
     } catch {}
     setLoading(false);
   };
@@ -71,7 +72,7 @@ export default function BranchGroups() {
               <div style={{ padding: '16px 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 40, height: 40, background: 'rgba(99,102,241,0.1)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🗂️</div>
+                    <div style={{ width: 40, height: 40, background: 'rgba(99,102,241,0.1)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}><MdWorkspaces /></div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 15 }}>{g.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{g.branches?.length || 0} branches</div>

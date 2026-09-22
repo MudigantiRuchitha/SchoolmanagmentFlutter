@@ -7,7 +7,7 @@ export default defineConfig({
     port: 2100,
     proxy: {
       '/api': {
-        target: 'https://acsdemo.co.in',
+        target: 'http://localhost:5000',
         changeOrigin: true,
       }
     }

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import ClassSectionSelect from '../components/ClassSectionSelect';
 import { getDashboardStats, getDashboardAttendance, getRecentNotices, getBranches, getClasses } from '../api';
-import { MdPeople, MdSchool, MdBusiness, MdPerson, MdAdminPanelSettings, MdCategory, MdEventNote, MdTune } from 'react-icons/md';
+import { MdPeople, MdSchool, MdBusiness, MdPerson, MdAdminPanelSettings, MdCategory, MdEventNote, MdTune, MdAnnouncement } from 'react-icons/md';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { format } from 'date-fns';
+import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 
 const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#6366f1'];
 
@@ -15,7 +17,7 @@ export default function Dashboard() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [attType, setAttType] = useState('student');
-  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState(getBranchScope);
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -26,7 +28,7 @@ export default function Dashboard() {
     try {
       const [s, b, n] = await Promise.all([getDashboardStats(), getBranches(), getRecentNotices()]);
       setStats(s.data.stats);
-      setBranches(b.data.branches);
+      setBranches(filterBranches(b.data.branches || []));
       setNotices(n.data.notices);
     } catch {}
     setLoading(false);
@@ -52,14 +54,14 @@ export default function Dashboard() {
   }, [selectedBranch]);
 
   const statCards = stats ? [
-    { label: 'Total Students', value: stats.total_students, icon: '🎓', bg: '#eff6ff', color: '#3b82f6' },
-    { label: 'Teaching Staff', value: stats.teaching_staff, icon: '👨‍🏫', bg: '#f0fdf4', color: '#10b981' },
-    { label: 'Non-Teaching', value: stats.non_teaching_staff, icon: '👤', bg: '#fefce8', color: '#eab308' },
-    { label: 'Management', value: stats.management_staff, icon: '💼', bg: '#fdf4ff', color: '#a855f7' },
-    { label: 'Total Staff', value: stats.total_staff, icon: '👥', bg: '#fff7ed', color: '#f97316' },
-    { label: 'Admin Users', value: stats.total_admins, icon: '🛡️', bg: '#fef2f2', color: '#ef4444' },
-    { label: 'Classes', value: stats.total_classes, icon: '📚', bg: '#f0fdfa', color: '#14b8a6' },
-    { label: 'Branches', value: stats.total_branches, icon: '🏢', bg: '#eff6ff', color: '#6366f1' },
+    { label: 'Total Students', value: stats.total_students, icon: <MdSchool />, bg: '#eff6ff', color: '#3b82f6' },
+    { label: 'Teaching Staff', value: stats.teaching_staff, icon: <MdPeople />, bg: '#f0fdf4', color: '#10b981' },
+    { label: 'Non-Teaching', value: stats.non_teaching_staff, icon: <MdPerson />, bg: '#fefce8', color: '#eab308' },
+    { label: 'Management', value: stats.management_staff, icon: <MdAdminPanelSettings />, bg: '#fdf4ff', color: '#a855f7' },
+    { label: 'Total Staff', value: stats.total_staff, icon: <MdPeople />, bg: '#fff7ed', color: '#f97316' },
+    { label: 'Admin Users', value: stats.total_admins, icon: <MdAdminPanelSettings />, bg: '#fef2f2', color: '#ef4444' },
+    { label: 'Classes', value: stats.total_classes, icon: <MdCategory />, bg: '#f0fdfa', color: '#14b8a6' },
+    { label: 'Branches', value: stats.total_branches, icon: <MdBusiness />, bg: '#eff6ff', color: '#6366f1' },
   ] : [];
 
   const summary = attendance.summary || {};
@@ -115,14 +117,18 @@ export default function Dashboard() {
               <button className={`tab-btn ${attType === 'staff' ? 'active' : ''}`} onClick={() => setAttType('staff')}>Staff</button>
             </div>
             <select className="input" style={{ width: 160, padding: '8px 10px', fontSize: 13 }} value={selectedBranch} onChange={(e) => { setSelectedBranch(e.target.value); setSelectedClass(''); }}>
-              <option value="">All Branches</option>
+              {!isDedicatedBranchUser() && <option value="">All Branches</option>}
               {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
-            {attType === 'student' && classes.length > 0 && (
-              <select className="input" style={{ width: 160, padding: '8px 10px', fontSize: 13 }} value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
-                <option value="">All Classes</option>
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.section}</option>)}
-              </select>
+            {attType === 'student' && selectedBranch && classes.length > 0 && (
+              <ClassSectionSelect
+                classes={classes}
+                value={selectedClass}
+                onChange={setSelectedClass}
+                includeAll
+                classStyle={{ width: 160, padding: '8px 10px', fontSize: 13 }}
+                sectionStyle={{ width: 140, padding: '8px 10px', fontSize: 13 }}
+              />
             )}
           </div>
 
@@ -204,7 +210,7 @@ export default function Dashboard() {
           {/* Notices */}
           <div className="card" style={{ flex: 1 }}>
             <div className="card-header" style={{ padding: '16px 20px' }}>
-              <div className="card-title" style={{ fontSize: 14 }}>📢 Recent Notices</div>
+              <div className="card-title" style={{ fontSize: 14 }}><MdAnnouncement /> Recent Notices</div>
             </div>
             <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {notices.length === 0 ? (

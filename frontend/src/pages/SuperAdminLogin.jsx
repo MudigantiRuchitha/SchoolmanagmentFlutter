@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginSuperAdmin } from '../api';
-import { MdAdminPanelSettings, MdPerson, MdLock, MdLogin, MdVisibility, MdVisibilityOff, MdArrowBack } from 'react-icons/md';
+import { MdAdminPanelSettings, MdPerson, MdLock, MdLogin, MdVisibility, MdVisibilityOff, MdArrowBack, MdBusiness, MdWarning } from 'react-icons/md';
 
 export default function SuperAdminLogin() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -33,8 +33,8 @@ export default function SuperAdminLogin() {
     <div className="login-page">
       <div className="login-left" style={{ background: 'linear-gradient(135deg, #1a0533 0%, #2d1b69 50%, #1a0533 100%)' }}>
         <div className="login-hero">
-          <div className="login-hero-icon" style={{ background: 'linear-gradient(135deg, #8b5cf6, #d946ef)' }}>
-            🛡️
+          <div className="login-hero-icon">
+            <MdAdminPanelSettings />
           </div>
           <h1 className="login-hero-title">Super Admin Portal</h1>
           <p className="login-hero-sub">
@@ -42,10 +42,10 @@ export default function SuperAdminLogin() {
           </p>
           <div className="login-features">
             {[
-              { icon: '🏢', text: 'Create and manage organisations' },
-              { icon: '🔑', text: 'Set admin credentials for each org' },
-              { icon: '📈', text: 'Monitor platform-wide statistics' },
-              { icon: '🔒', text: 'Control access and permissions' },
+              { icon: <MdBusiness />, text: 'Create and manage organisations' },
+              { icon: <MdLock />, text: 'Set admin credentials for each org' },
+              { icon: <MdAdminPanelSettings />, text: 'Monitor platform-wide statistics' },
+              { icon: <MdLock />, text: 'Control access and permissions' },
             ].map((f, i) => (
               <div key={i} className="login-feature">
                 <div className="login-feature-icon" style={{ background: 'rgba(139,92,246,0.15)' }}>{f.icon}</div>
@@ -67,7 +67,7 @@ export default function SuperAdminLogin() {
           </div>
 
           {error && (
-            <div className="login-alert login-alert-error">⚠️ {error}</div>
+            <div className="login-alert login-alert-error"><MdWarning style={{ verticalAlign: 'middle', marginRight: 6 }} /> {error}</div>
           )}
 
           <form onSubmit={handleSubmit}>
@@ -128,13 +128,7 @@ export default function SuperAdminLogin() {
             </button>
           </form>
 
-          <div style={{ marginTop: '24px', padding: '16px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Default Credentials</div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div>👤 Username: <strong>superadmin</strong></div>
-              <div>🔑 Password: <strong>SuperAdmin@123</strong></div>
-            </div>
-          </div>
+          
 
           <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             <Link to="/login" style={{ color: 'var(--text-secondary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>

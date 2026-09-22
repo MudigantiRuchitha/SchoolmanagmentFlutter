@@ -72,7 +72,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <NavLink to="/dashboard" className="sidebar-logo">
-        <div className="sidebar-logo-icon">🏫</div>
+        <div className="sidebar-logo-icon"><MdSchool /></div>
         <div className="sidebar-logo-text">
           <div className="sidebar-logo-title">{org?.name || 'School Management'}</div>
           <div className="sidebar-logo-sub">Code: {org?.code?.toUpperCase()}</div>

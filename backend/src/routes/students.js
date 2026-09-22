@@ -42,6 +42,11 @@ router.get('/', authMiddleware, async (req, res) => {
       WHERE s.org_id = $1`;
     const params = [req.admin.orgId];
     let paramCount = 1;
+    if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
+      paramCount++;
+      query += ` AND s.branch_id = $${paramCount}`;
+      params.push(req.admin.branchAccess);
+    }
 
     if (branch_id) { paramCount++; query += ` AND s.branch_id = $${paramCount}`; params.push(branch_id); }
     if (class_id) { paramCount++; query += ` AND s.class_id = $${paramCount}`; params.push(class_id); }
@@ -72,8 +77,14 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
     }
 
     // Pre-fetch branches and classes for name matching
-    const branchesRes = await client.query('SELECT id, name, code FROM branches WHERE org_id = $1', [orgId]);
-    const classesRes = await client.query('SELECT id, name, section, branch_id FROM classes WHERE org_id = $1', [orgId]);
+    const branchesRes = await client.query(
+      `SELECT id, name, code FROM branches WHERE org_id = $1${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $2' : ''}`,
+      req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [orgId, req.admin.branchAccess] : [orgId]
+    );
+    const classesRes = await client.query(
+      `SELECT id, name, section, branch_id FROM classes WHERE org_id = $1${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND branch_id = $2' : ''}`,
+      req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [orgId, req.admin.branchAccess] : [orgId]
+    );
 
     const branchesList = branchesRes.rows;
     const classesList = classesRes.rows;
@@ -103,10 +114,10 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
       }
 
       // Resolve branch
-      let branchId = null;
-      if (row.branchId) {
+      let branchId = req.admin.branchAccess !== 'all' ? Number(req.admin.branchAccess) : null;
+      if (req.admin.branchAccess === 'all' && row.branchId) {
         branchId = parseInt(row.branchId);
-      } else if (row.branchName) {
+      } else if (req.admin.branchAccess === 'all' && row.branchName) {
         const matchedBranch = branchesList.find(b => 
           b.name.toLowerCase() === String(row.branchName).toLowerCase().trim() ||
           (b.code && b.code.toLowerCase() === String(row.branchName).toLowerCase().trim())
@@ -194,7 +205,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (!fName && !computedFullName) return res.status(400).json({ success: false, message: 'First name is required.' });
 
-    let finalBranchId = branchId || null;
+    let finalBranchId = req.admin.branchAccess !== 'all' ? Number(req.admin.branchAccess) : (branchId || null);
     if (!finalBranchId && classId) {
       const cRes = await pool.query('SELECT branch_id FROM classes WHERE id = $1', [classId]);
       if (cRes.rows.length > 0 && cRes.rows[0].branch_id) {
@@ -226,9 +237,25 @@ router.post('/', authMiddleware, async (req, res) => {
     );
     res.status(201).json({ success: true, student: result.rows[0] });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  console.error(err);
+
+  // Duplicate Student ID / Admission Number
+  if (
+    err.code === '23505' &&
+    err.constraint &&
+    err.constraint.includes('unique_student_admission_per_org')
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'Student ID already exists. Please enter a different Student ID.'
+    });
   }
+
+  return res.status(500).json({
+    success: false,
+    message: 'Server error: ' + err.message
+  });
+}
 });
 
 // GET /api/students/:id
@@ -237,8 +264,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const result = await pool.query(
       `SELECT s.*, COALESCE(c.name, c.class_name) as class_name, c.section, b.name as branch_name
        FROM students s LEFT JOIN classes c ON c.id = s.class_id LEFT JOIN branches b ON b.id = s.branch_id
-       WHERE s.id = $1 AND s.org_id = $2`,
-      [req.params.id, req.admin.orgId]
+      WHERE s.id = $1 AND s.org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND s.branch_id = $3' : ''}`,
+          req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Student not found.' });
     res.json({ success: true, student: result.rows[0] });
@@ -290,20 +317,40 @@ router.put('/:id', authMiddleware, async (req, res) => {
         is_active = COALESCE($12, is_active),
         first_name = COALESCE($13, first_name),
         last_name = COALESCE($14, last_name)
-       WHERE id = $15 AND org_id = $16 RETURNING *`,
-      [admissionNo, rNo, rNo, computedFullName, phone, parentName, parentPhone, gender, dateOfBirth, classId, finalBranchId, isActive, fName, lName, req.params.id, req.admin.orgId]
+      WHERE id = $15 AND org_id = $16${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND branch_id = $17' : ''} RETURNING *`,
+          [admissionNo, rNo, rNo, computedFullName, phone, parentName, parentPhone, gender, dateOfBirth, classId, finalBranchId, isActive, fName, lName, req.params.id, req.admin.orgId, ...(req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.admin.branchAccess] : [])]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Student not found.' });
     res.json({ success: true, student: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
+  console.error('Student update error:', err);
+
+  // Duplicate Student ID / Admission Number
+  if (
+    err.code === '23505' &&
+    err.constraint &&
+    err.constraint.includes('unique_student_admission_per_org')
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'Student ID already exists. Please enter a different Student ID.'
+    });
   }
+
+  return res.status(500).json({
+    success: false,
+    message: 'Server error: ' + err.message
+  });
+}
 });
 
 // DELETE /api/students/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM students WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query(
+      `DELETE FROM students WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND branch_id = $3' : ''}`,
+      req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
+    );
     res.json({ success: true, message: 'Student deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

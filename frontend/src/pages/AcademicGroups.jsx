@@ -62,7 +62,7 @@ export default function AcademicGroups() {
             <div key={g.id} className="card">
               <div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ width: 52, height: 52, borderRadius: 12, background: `${COLORS[i % COLORS.length]}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
-                  📚
+                  <MdCategory />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{g.name}</div>

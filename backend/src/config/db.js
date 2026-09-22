@@ -122,3 +122,38 @@ const dbInterface = {
 };
 
 module.exports = dbInterface;
+pgPool.query(`
+  SELECT id, org_id, staff_id, full_name, username, branch_id
+  FROM public.staff
+  ORDER BY id
+`)
+.then(result => {
+  console.log("========== STAFF DATA FROM BACKEND ==========");
+  console.table(result.rows);
+  console.log("TOTAL STAFF:", result.rows.length);
+  console.log("==============================================");
+})
+.catch(err => {
+  console.error("STAFF CHECK ERROR:", err.message);
+});
+// TEMPORARY DATABASE CHECK
+pgPool.query(`
+  SELECT
+    current_database() AS database_name,
+    current_schema() AS schema_name,
+    current_user AS database_user,
+    inet_server_addr() AS server_address,
+    inet_server_port() AS server_port
+`)
+.then(result => {
+  console.log('');
+  console.log('==========================================');
+  console.log('🔎 BACKEND DATABASE CONNECTION');
+  console.log('==========================================');
+  console.log(result.rows[0]);
+  console.log('==========================================');
+})
+.catch(err => {
+  console.error('❌ DATABASE CHECK FAILED:', err.message);
+});
+

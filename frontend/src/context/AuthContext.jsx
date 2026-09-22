@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { getMe } from '../api';
 
 const AuthContext = createContext(null);
 
@@ -8,27 +9,67 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    const savedOrg = localStorage.getItem('org');
+    const restoreSession = async () => {
+      const token = localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user');
+      const savedOrg = localStorage.getItem('org');
 
-    if (token && savedUser && savedOrg) {
+      if (!token || !savedUser || !savedOrg) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        setUser(JSON.parse(savedUser));
+        const parsedUser = JSON.parse(savedUser);
         setOrg(JSON.parse(savedOrg));
+
+        // Do not render protected pages until the database-backed branch scope
+        // replaces any stale local-storage value.
+        const response = await getMe();
+        const serverUser = response.data.user;
+        const currentUser = {
+          ...parsedUser,
+          ...serverUser,
+          fullName: serverUser.fullName || serverUser.full_name || parsedUser.fullName,
+          branchAccess: serverUser.branchAccess || serverUser.branch_access || parsedUser.branchAccess || 'all'
+        };
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        setUser(currentUser);
       } catch {
         localStorage.clear();
+        setUser(null);
+        setOrg(null);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    restoreSession();
   }, []);
 
-  const login = (token, userData, orgData) => {
+  const login = async (token, userData, orgData) => {
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
     localStorage.setItem('org', JSON.stringify(orgData));
-    setUser(userData);
-    setOrg(orgData);
+
+    try {
+      const response = await getMe();
+      const serverUser = response.data.user;
+      const currentUser = {
+        ...userData,
+        ...serverUser,
+        fullName: serverUser.fullName || serverUser.full_name || userData.fullName || userData.full_name,
+        branchAccess: serverUser.branchAccess || serverUser.branch_access || userData.branchAccess || userData.branch_access || 'all'
+      };
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      setUser(currentUser);
+      setOrg(orgData);
+      return currentUser;
+    } catch {
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      setOrg(orgData);
+      return userData;
+    }
   };
 
   const logout = () => {

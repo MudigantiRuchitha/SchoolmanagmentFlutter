@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getSuperAdminStats, getSuperAdminOrgs, createOrg, updateOrg, deleteOrg } from '../api';
 import Modal from '../components/Modal';
-import { MdBusiness, MdGroup, MdPeople, MdSchool, MdAdd, MdEdit, MdDelete, MdLogout, MdCheckCircle, MdCancel, MdKey, MdArrowBack, MdAccessTime } from 'react-icons/md';
+import { MdBusiness, MdGroup, MdPeople, MdSchool, MdAdd, MdEdit, MdDelete, MdLogout, MdCheckCircle, MdCancel, MdKey, MdArrowBack, MdAccessTime, MdVisibility } from 'react-icons/md';
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -10,6 +10,8 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editOrg, setEditOrg] = useState(null);
+  const [showOrgViewModal, setShowOrgViewModal] = useState(false);
+  const [viewOrg, setViewOrg] = useState(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [form, setForm] = useState({
@@ -40,6 +42,7 @@ export default function SuperAdminDashboard() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const editingOrganisation = editOrg;
     setSaving(true);
     try {
       if (editOrg) {
@@ -60,7 +63,19 @@ export default function SuperAdminDashboard() {
       setShowModal(false);
       setEditOrg(null);
       resetForm();
-      fetchData();
+      await fetchData();
+      if (editingOrganisation) {
+        returnToOrgView({
+          ...editingOrganisation,
+          name: form.name,
+          domain: form.domain,
+          address: form.address,
+          phone: form.phone,
+          email: form.email,
+          timetable_access: form.timetableAccess,
+          allowed_attendance_mode: form.allowedAttendanceMode
+        });
+      }
     } catch (err) {
       showToast(err.response?.data?.message || 'Error occurred');
     }
@@ -80,11 +95,20 @@ export default function SuperAdminDashboard() {
     try {
       await updateOrg(org.id, { isActive: !org.is_active });
       showToast(`Organisation ${org.is_active ? 'deactivated' : 'activated'}.`);
-      fetchData();
+      await fetchData();
+      setViewOrg({ ...org, is_active: !org.is_active });
+      setShowOrgViewModal(true);
     } catch { showToast('Failed to update.'); }
   };
 
   const openCreate = () => { resetForm(); setEditOrg(null); setShowModal(true); };
+  const openOrgView = (org) => { setViewOrg(org); setShowOrgViewModal(true); };
+  const returnToOrgView = (org = viewOrg || editOrg) => {
+    if (org) {
+      setViewOrg(org);
+      setShowOrgViewModal(true);
+    }
+  };
   const openEdit = (org) => {
     setEditOrg(org);
     setForm({ 
@@ -102,6 +126,13 @@ export default function SuperAdminDashboard() {
       allowedAttendanceMode: org.allowed_attendance_mode || 'BOTH'
     });
     setShowModal(true);
+  };
+  const closeOrgEdit = () => {
+    const orgToView = editOrg || viewOrg;
+    setShowModal(false);
+    setEditOrg(null);
+    resetForm();
+    returnToOrgView(orgToView);
   };
   const resetForm = () => setForm({ 
     name: '', code: '', domain: '', address: '', phone: '', email: '', 
@@ -145,7 +176,7 @@ export default function SuperAdminDashboard() {
       </div>
 
       <div style={{ padding: '32px 32px' }}>
-        {toast && <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ {toast}</div>}
+        {toast && <div className="alert alert-success" style={{ marginBottom: 20 }}><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
         {/* Stats */}
         {stats && (
@@ -223,12 +254,7 @@ export default function SuperAdminDashboard() {
                     </td>
                     <td>
                       <div className="table-actions">
-                        <button className="btn btn-sm btn-secondary" onClick={() => openEdit(org)} title="Edit"><MdEdit size={14} /></button>
-                        <button className="btn btn-sm" onClick={() => handleToggle(org)} title={org.is_active ? 'Deactivate' : 'Activate'}
-                          style={{ background: org.is_active ? '#fef3c7' : '#dcfce7', color: org.is_active ? '#d97706' : '#15803d' }}>
-                          {org.is_active ? <MdCancel size={14} /> : <MdCheckCircle size={14} />}
-                        </button>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(org)} title="Delete"><MdDelete size={14} /></button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => openOrgView(org)} title="View organisation details and actions"><MdVisibility size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -239,15 +265,53 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
+      {/* Organisation Details and Actions */}
+      <Modal
+        isOpen={showOrgViewModal}
+        onClose={() => { setShowOrgViewModal(false); setViewOrg(null); }}
+        title={viewOrg ? viewOrg.name : 'Organisation Details'}
+        size="sm"
+        footer={<button className="btn btn-secondary" onClick={() => setShowOrgViewModal(false)}>Close</button>}
+      >
+        {viewOrg && (
+          <div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+              <div><strong>Organisation:</strong> {viewOrg.name || '—'}</div>
+              <div><strong>Code:</strong> {viewOrg.code || '—'}</div>
+              <div><strong>Branches:</strong> {viewOrg.branch_count || 0}</div>
+              <div><strong>Students:</strong> {viewOrg.student_count || 0}</div>
+              <div><strong>Staff:</strong> {viewOrg.staff_count || 0}</div>
+              <div><strong>Status:</strong> {viewOrg.is_active ? 'Active' : 'Inactive'}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <button className="btn btn-secondary" onClick={() => openEdit(viewOrg)}>
+                <MdEdit /> Edit Organisation
+              </button>
+              <button
+                className="btn"
+                onClick={() => handleToggle(viewOrg)}
+                style={{ background: viewOrg.is_active ? '#fef3c7' : '#dcfce7', color: viewOrg.is_active ? '#d97706' : '#15803d' }}
+              >
+                {viewOrg.is_active ? <MdCancel /> : <MdCheckCircle />}
+                {viewOrg.is_active ? 'Mark Inactive' : 'Mark Active'}
+              </button>
+              <button className="btn btn-danger" onClick={() => { setShowOrgViewModal(false); handleDelete(viewOrg); }}>
+                <MdDelete /> Delete Organisation
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Create/Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={() => { setShowModal(false); setEditOrg(null); }}
+        onClose={closeOrgEdit}
         title={editOrg ? `Edit: ${editOrg.name}` : 'Create New Organisation'}
         size="lg"
         footer={
           <>
-            <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditOrg(null); }}>Cancel</button>
+            <button className="btn btn-secondary" onClick={closeOrgEdit}>Cancel</button>
             <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
               {saving ? 'Saving...' : editOrg ? 'Save Changes' : 'Create Organisation'}
             </button>

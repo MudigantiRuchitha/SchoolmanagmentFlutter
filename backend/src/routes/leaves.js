@@ -8,7 +8,7 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { status, staff_id, from_date, to_date } = req.query;
     let query = `
-      SELECT l.*, s.full_name as staff_name, s.staff_id as staff_code, s.role_type,
+      SELECT l.*, s.full_name as staff_name, s.staff_id as staff_code, s.role_type, s.designation,
         b.name as branch_name, au.full_name as reviewed_by_name
       FROM leaves l
       JOIN staff s ON s.id = l.staff_id
@@ -23,6 +23,12 @@ router.get('/', authMiddleware, async (req, res) => {
     if (from_date) { pc++; query += ` AND l.from_date >= $${pc}`; params.push(from_date); }
     if (to_date) { pc++; query += ` AND l.to_date <= $${pc}`; params.push(to_date); }
 
+    if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
+      pc++;
+      query += ` AND s.branch_id = $${pc}`;
+      params.push(req.admin.branchAccess);
+    }
+
     query += ' ORDER BY l.applied_at DESC';
     const result = await pool.query(query, params);
 
@@ -31,6 +37,7 @@ router.get('/', authMiddleware, async (req, res) => {
       pending: result.rows.filter(r => r.status === 'pending').length,
       approved: result.rows.filter(r => r.status === 'approved').length,
       rejected: result.rows.filter(r => r.status === 'rejected').length,
+      informed: result.rows.filter(r => r.status === 'informed').length,
     };
 
     res.json({ success: true, leaves: result.rows, stats });
@@ -78,19 +85,31 @@ router.delete('/types/:id', authMiddleware, async (req, res) => {
 // POST /api/leaves - Apply for leave
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { staffId, leaveTypeId, leaveTypeName, fromDate, toDate, reason } = req.body;
+    const { staffId, leaveTypeId, leaveTypeName, fromDate, toDate, reason, status } = req.body;
     if (!staffId || !fromDate || !toDate) {
       return res.status(400).json({ success: false, message: 'Staff, from date and to date are required.' });
     }
 
+    const staffResult = await pool.query(
+      'SELECT role_type, designation, full_name, username FROM staff WHERE id = $1 AND org_id = $2',
+      [staffId, req.admin.orgId]
+    );
+    if (staffResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Staff member not found.' });
+    }
+
+    const selectedStaff = staffResult.rows[0];
+    const isManagementLeave = [selectedStaff.role_type, selectedStaff.designation, selectedStaff.full_name, selectedStaff.username]
+      .some(value => /principal|management/i.test(String(value || '')));
     const from = new Date(fromDate);
     const to = new Date(toDate);
     const totalDays = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+    const normalizedStatus = isManagementLeave ? 'informed' : 'pending';
 
     const result = await pool.query(
-      `INSERT INTO leaves (org_id, staff_id, leave_type_id, leave_type_name, from_date, to_date, total_days, reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [req.admin.orgId, staffId, leaveTypeId || null, leaveTypeName || null, fromDate, toDate, totalDays, reason || null]
+      `INSERT INTO leaves (org_id, staff_id, leave_type_id, leave_type_name, from_date, to_date, total_days, reason, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [req.admin.orgId, staffId, leaveTypeId || null, leaveTypeName || null, fromDate, toDate, totalDays, reason || null, normalizedStatus]
     );
     res.status(201).json({ success: true, leave: result.rows[0] });
   } catch (err) {
@@ -105,7 +124,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const { status, reviewComment, reason, fromDate, toDate, leaveTypeId, leaveTypeName } = req.body;
     let query, params;
 
-    if (status === 'approved' || status === 'rejected') {
+    if (status === 'approved' || status === 'rejected' || status === 'informed') {
       query = `UPDATE leaves SET status = $1, reviewed_at = NOW(), reviewed_by = $2, review_comment = $3
                WHERE id = $4 AND org_id = $5 RETURNING *`;
       params = [status, req.admin.adminId, reviewComment || null, req.params.id, req.admin.orgId];

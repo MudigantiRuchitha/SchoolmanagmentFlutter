@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import { useAuth } from '../context/AuthContext';
+import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
+import ClassSectionSelect from '../components/ClassSectionSelect';
 import { getStaff, createStaff, updateStaff, deleteStaff, getBranches, getClasses, assignStaffClasses, bulkImportStaff } from '../api';
 import { 
   MdAdd, MdEdit, MdDelete, MdSearch, MdPeople, MdCheckCircle, MdCancel, 
-  MdDownload, MdUpload, MdClass, MdVisibility, MdVisibilityOff, MdFilePresent 
+  MdDownload, MdUpload, MdClass, MdVisibility, MdVisibilityOff, MdFilePresent,
+  MdPerson,MdWarning
 } from 'react-icons/md';
 
 const ROLES = ['teaching', 'non-teaching', 'management'];
@@ -15,13 +19,14 @@ const emptyForm = {
 };
 
 export default function Staff() {
+  const { user } = useAuth();
   const [staff, setStaff] = useState([]);
   const [branches, setBranches] = useState([]);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('');
-  const [filterBranch, setFilterBranch] = useState('');
+  const [filterBranch, setFilterBranch] = useState(getBranchScope);
   const [filterStatus, setFilterStatus] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -43,14 +48,22 @@ export default function Staff() {
   const [showClassModal, setShowClassModal] = useState(false);
   const [assigningStaff, setAssigningStaff] = useState(null);
   const [selectedClassIds, setSelectedClassIds] = useState([]);
+  const [assignmentClassId, setAssignmentClassId] = useState('');
   const [assigning, setAssigning] = useState(false);
 
   // View Assigned Classes Details Popup Modal
   const [showViewClassesModal, setShowViewClassesModal] = useState(false);
   const [viewClassesStaff, setViewClassesStaff] = useState(null);
   const [viewClassesList, setViewClassesList] = useState([]);
+  const [showStaffViewModal, setShowStaffViewModal] = useState(false);
+  const [viewStaff, setViewStaff] = useState(null);
 
   const [toast, setToast] = useState('');
+
+  const filterBranchScoped = (items) => {
+    if (!user?.branchAccess || user.branchAccess === 'all') return items;
+    return items.filter(item => String(item.branch_id) === String(user.branchAccess));
+  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
   useEffect(() => { fetchInit(); }, []);
@@ -59,8 +72,8 @@ export default function Staff() {
     setLoading(true);
     try {
       const [s, b, c] = await Promise.all([getStaff(), getBranches(), getClasses()]);
-      setStaff(s.data.staff || []);
-      setBranches(b.data.branches || []);
+      setStaff(filterBranchScoped(s.data.staff || []));
+      setBranches(filterBranches(b.data.branches || []));
       setClasses(c.data.classes || []);
     } catch {}
     setLoading(false);
@@ -72,7 +85,7 @@ export default function Staff() {
     if (filterBranch) params.branch_id = filterBranch;
     if (filterStatus) params.status = filterStatus;
     if (search) params.search = search;
-    try { const r = await getStaff(params); setStaff(r.data.staff || []); } catch {}
+    try { const r = await getStaff(params); setStaff(filterBranchScoped(r.data.staff || [])); } catch {}
   };
 
   useEffect(() => { fetchStaff(); }, [filterRole, filterBranch, filterStatus]);
@@ -196,12 +209,21 @@ export default function Staff() {
     setShowModal(true);
   };
 
+  const openStaffView = (s) => { setViewStaff(s); setShowStaffViewModal(true); };
+
   // Open Multi-Class Assignment Modal for a Staff Member
   const openClassModal = (s) => {
     setAssigningStaff(s);
     const currentClassIds = classes.filter(c => (c.teacher_ids && Array.isArray(c.teacher_ids) && c.teacher_ids.includes(s.id)) || c.teacher_id === s.id).map(c => c.id);
     setSelectedClassIds(currentClassIds);
+    setAssignmentClassId('');
     setShowClassModal(true);
+  };
+
+  const addAssignmentClass = () => {
+    if (!assignmentClassId || selectedClassIds.includes(Number(assignmentClassId))) return;
+    setSelectedClassIds(prev => [...prev, Number(assignmentClassId)]);
+    setAssignmentClassId('');
   };
 
   const openViewClassesDetails = (s) => {
@@ -229,19 +251,29 @@ export default function Staff() {
   };
 
   const exportCSV = () => {
-    if (staff.length === 0) return;
-    const headers = ['Staff ID', 'Username', 'First Name', 'Last Name', 'Full Name', 'Role Type', 'Designation', 'Branch', 'Assigned Classes', 'Phone', 'Email', 'Gender', 'Status'];
-    const rows = staff.map(s => [
-      s.staff_id || '', s.username || '', `"${s.first_name || ''}"`, `"${s.last_name || ''}"`, `"${s.full_name}"`, s.role_type, `"${s.designation || ''}"`, `"${s.branch_name || ''}"`, `"${s.assigned_classes || ''}"`, s.phone || '', s.email || '', s.gender || '', s.is_active ? 'Active' : 'Inactive'
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `staff_list_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      if (!staff || staff.length === 0) {
+        showToast('No rows to export. There are no staff records available.');
+        return;
+      }
+
+      const headers = ['Staff ID', 'Username', 'First Name', 'Last Name', 'Full Name', 'Role Type', 'Designation', 'Branch', 'Assigned Classes', 'Phone', 'Email', 'Gender', 'Status'];
+      const rows = staff.map(s => [
+        s.staff_id || '', s.username || '', `"${s.first_name || ''}"`, `"${s.last_name || ''}"`, `"${s.full_name}"`, s.role_type, `"${s.designation || ''}"`, `"${s.branch_name || ''}"`, `"${s.assigned_classes || ''}"`, s.phone || '', s.email || '', s.gender || '', s.is_active ? 'Active' : 'Inactive'
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `staff_list_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Staff CSV exported successfully.');
+    } catch (error) {
+      console.error('Staff CSV export failed:', error);
+      showToast('CSV export failed. Please try again.');
+    }
   };
 
   const downloadSampleCSV = () => {
@@ -346,33 +378,33 @@ export default function Staff() {
 
   return (
     <Layout title="Staff" subtitle="Manage teaching, non-teaching, and management staff">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Top Stats */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}>👥</div>
+          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}><MdPeople /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.total}</div>
             <div className="stat-label">Total Staff</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}>👨‍🏫</div>
+          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}><MdPeople /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#10b981' }}>{stats.teaching}</div>
             <div className="stat-label">Teaching Staff</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fefce8', color: '#eab308' }}>👤</div>
+          <div className="stat-icon" style={{ background: '#fefce8', color: '#eab308' }}><MdPerson /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#eab308' }}>{stats.nonTeaching}</div>
             <div className="stat-label">Non-Teaching Staff</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}>💼</div>
+          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}><MdClass /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#a855f7' }}>{stats.management}</div>
             <div className="stat-label">Management Staff</div>
@@ -396,7 +428,7 @@ export default function Staff() {
             {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
           </select>
           <select className="input" style={{ width: 120, padding: '6px 8px', fontSize: 12.5, height: 36 }} value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)}>
-            <option value="">All Branches</option>
+            {!isDedicatedBranchUser() && <option value="">All Branches</option>}
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
           <select className="input" style={{ width: 100, padding: '6px 8px', fontSize: 12.5, height: 36 }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -470,8 +502,8 @@ export default function Staff() {
                     })()}
                   </td>
                   <td style={{ fontSize: 13 }}>
-                    {s.phone && <div>📞 {s.phone}</div>}
-                    {s.email && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>✉️ {s.email}</div>}
+                    {s.phone && <div><MdPerson style={{ verticalAlign: 'middle', marginRight: 4 }} /> {s.phone}</div>}
+                    {s.email && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}><MdPerson style={{ verticalAlign: 'middle', marginRight: 4 }} /> {s.email}</div>}
                   </td>
                   <td>
                     <span className={`badge ${s.is_active ? 'badge-success' : 'badge-danger'}`}>
@@ -480,24 +512,7 @@ export default function Staff() {
                   </td>
                   <td>
                     <div className="table-actions">
-                      <button 
-                        className="btn btn-sm" 
-                        onClick={() => openClassModal(s)} 
-                        title="Assign Multiple Classes"
-                        style={{ background: '#e0f2fe', color: '#0284c7' }}
-                      >
-                        <MdClass size={14} />
-                      </button>
-                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(s)} title="Edit Staff"><MdEdit size={14} /></button>
-                      <button 
-                        className="btn btn-sm" 
-                        onClick={() => handleToggleStatus(s)} 
-                        title={s.is_active ? 'Deactivate' : 'Activate'}
-                        style={{ background: s.is_active ? '#fef3c7' : '#dcfce7', color: s.is_active ? '#d97706' : '#15803d' }}
-                      >
-                        {s.is_active ? <MdCancel size={14} /> : <MdCheckCircle size={14} />}
-                      </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s)} title="Delete Staff"><MdDelete size={14} /></button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => openStaffView(s)} title="View staff details and actions"><MdVisibility size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -506,6 +521,24 @@ export default function Staff() {
           </table>
         </div>
       )}
+
+      <Modal isOpen={showStaffViewModal} onClose={() => setShowStaffViewModal(false)} title={viewStaff ? `Staff: ${viewStaff.full_name}` : 'Staff Details'} size="sm" footer={<button className="btn btn-secondary" onClick={() => setShowStaffViewModal(false)}>Close</button>}>
+        {viewStaff && <div>
+          <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+            <div><strong>Staff ID:</strong> {viewStaff.staff_id || '—'}</div>
+            <div><strong>Role:</strong> {viewStaff.role_type || '—'}</div>
+            <div><strong>Designation:</strong> {viewStaff.designation || '—'}</div>
+            <div><strong>Branch:</strong> {viewStaff.branch_name || '—'}</div>
+            <div><strong>Status:</strong> {viewStaff.is_active ? 'Active' : 'Inactive'}</div>
+          </div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <button className="btn btn-secondary" onClick={() => { setShowStaffViewModal(false); openEdit(viewStaff); }}><MdEdit /> Edit Staff</button>
+            <button className="btn btn-secondary" onClick={() => { setShowStaffViewModal(false); openClassModal(viewStaff); }}><MdClass /> Staff Allocation</button>
+            <button className="btn" onClick={() => handleToggleStatus(viewStaff)} style={{ background: viewStaff.is_active ? '#fef3c7' : '#dcfce7', color: viewStaff.is_active ? '#d97706' : '#15803d' }}><MdCancel /> {viewStaff.is_active ? 'Deactivate Staff' : 'Activate Staff'}</button>
+            <button className="btn btn-danger" onClick={() => { setShowStaffViewModal(false); handleDelete(viewStaff); }}><MdDelete /> Delete Staff</button>
+          </div>
+        </div>}
+      </Modal>
 
       {/* Edit / Add Staff Modal with Field-Level Errors */}
       <Modal 
@@ -534,7 +567,7 @@ export default function Staff() {
                 style={{ borderColor: fieldErrors.firstName ? '#ef4444' : '' }}
                 required 
               />
-              {fieldErrors.firstName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.firstName}</div>}
+              {fieldErrors.firstName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.firstName}</div>}
             </div>
             <div className="form-group">
               <label>Last Name *</label>
@@ -546,7 +579,7 @@ export default function Staff() {
                 style={{ borderColor: fieldErrors.lastName ? '#ef4444' : '' }}
                 required 
               />
-              {fieldErrors.lastName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.lastName}</div>}
+              {fieldErrors.lastName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.lastName}</div>}
             </div>
           </div>
 
@@ -560,7 +593,7 @@ export default function Staff() {
                 onChange={(e) => { setForm({ ...form, staffId: e.target.value }); setFieldErrors({ ...fieldErrors, staffId: '' }); }} 
                 style={{ fontFamily: 'monospace', borderColor: fieldErrors.staffId ? '#ef4444' : '' }} 
               />
-              {fieldErrors.staffId && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.staffId}</div>}
+              {fieldErrors.staffId && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.staffId}</div>}
             </div>
             <div className="form-group">
               <label>Username (Device Login)</label>
@@ -571,7 +604,7 @@ export default function Staff() {
                 onChange={(e) => { setForm({ ...form, username: e.target.value }); setFieldErrors({ ...fieldErrors, username: '' }); }} 
                 style={{ fontFamily: 'monospace', borderColor: fieldErrors.username ? '#ef4444' : '' }} 
               />
-              {fieldErrors.username && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.username}</div>}
+              {fieldErrors.username && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.username}</div>}
             </div>
           </div>
 
@@ -612,8 +645,8 @@ export default function Staff() {
           <div className="form-row">
             <div className="form-group">
               <label>Branch</label>
-              <select className="input" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
-                <option value="">Select Branch</option>
+              <select className="input" value={form.branchId || getBranchScope()} onChange={(e) => setForm({ ...form, branchId: e.target.value })} disabled={isDedicatedBranchUser()}>
+                {!isDedicatedBranchUser() && <option value="">Select Branch</option>}
                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
@@ -633,7 +666,7 @@ export default function Staff() {
                 onChange={(e) => { setForm({ ...form, phone: e.target.value }); setFieldErrors({ ...fieldErrors, phone: '' }); }} 
                 style={{ borderColor: fieldErrors.phone ? '#ef4444' : '' }}
               />
-              {fieldErrors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.phone}</div>}
+              {fieldErrors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.phone}</div>}
             </div>
             <div className="form-group">
               <label>Email Address</label>
@@ -645,7 +678,7 @@ export default function Staff() {
                 onChange={(e) => { setForm({ ...form, email: e.target.value }); setFieldErrors({ ...fieldErrors, email: '' }); }} 
                 style={{ borderColor: fieldErrors.email ? '#ef4444' : '' }}
               />
-              {fieldErrors.email && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>⚠️ {fieldErrors.email}</div>}
+              {fieldErrors.email && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.email}</div>}
             </div>
           </div>
 
@@ -778,9 +811,22 @@ export default function Staff() {
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
             Select the classes and sections that this staff member is authorized to teach and mark attendance for:
           </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <ClassSectionSelect
+              classes={classes}
+              value={assignmentClassId}
+              onChange={setAssignmentClassId}
+              classStyle={{ flex: 1 }}
+              sectionStyle={{ flex: 1 }}
+              style={{ flex: 1 }}
+            />
+            <button type="button" className="btn btn-secondary" onClick={addAssignmentClass} disabled={!assignmentClassId}>
+              Add
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, maxHeight: 320, overflowY: 'auto', padding: '4px 0' }}>
             {classes.map(c => {
-              const isChecked = selectedClassIds.includes(c.id);
+              const isChecked = selectedClassIds.map(Number).includes(Number(c.id));
               return (
                 <label 
                   key={c.id} 
@@ -795,8 +841,11 @@ export default function Staff() {
                     type="checkbox" 
                     checked={isChecked}
                     onChange={(e) => {
-                      if (e.target.checked) setSelectedClassIds([...selectedClassIds, c.id]);
-                      else setSelectedClassIds(selectedClassIds.filter(id => id !== c.id));
+                      if (e.target.checked) {
+                        setSelectedClassIds(prev => prev.map(Number).includes(Number(c.id)) ? prev : [...prev, c.id]);
+                      } else {
+                        setSelectedClassIds(prev => prev.filter(id => Number(id) !== Number(c.id)));
+                      }
                     }}
                     style={{ accentColor: 'var(--primary)', width: 16, height: 16 }}
                   />

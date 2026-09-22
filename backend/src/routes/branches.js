@@ -18,6 +18,11 @@ router.get('/', authMiddleware, async (req, res) => {
     `;
     const params = [req.admin.orgId];
 
+    if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
+      params.push(req.admin.branchAccess);
+      query += ` AND b.id = $${params.length}`;
+    }
+
     if (status === 'active') {
       query += ` AND b.is_active = true`;
     } else if (status === 'inactive') {
@@ -43,8 +48,8 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/:id/details', authMiddleware, async (req, res) => {
   try {
     const branchRes = await pool.query(
-      'SELECT * FROM branches WHERE id = $1 AND org_id = $2',
-      [req.params.id, req.admin.orgId]
+      `SELECT * FROM branches WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $3' : ''}`,
+      req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
     );
     if (branchRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Branch not found.' });
 
@@ -72,12 +77,20 @@ router.get('/:id/details', authMiddleware, async (req, res) => {
 // POST /api/branches
 router.post('/', authMiddleware, async (req, res) => {
   try {
+    if (req.admin.branchAccess !== 'all') {
+      return res.status(403).json({ success: false, message: 'Dedicated branch users cannot create another branch.' });
+    }
     const { 
       name, code, contactPerson, phone, email, address, latitude, longitude, geofenceRadius,
       createBranchAdmin, adminUsername, adminPassword, adminFullName, adminEmail, adminPhone 
     } = req.body;
 
-    if (!name) return res.status(400).json({ success: false, message: 'Branch name is required.' });
+    if (!name || !code || !contactPerson || !phone || !email) {
+      return res.status(400).json({ success: false, message: 'Branch name, code, contact person, phone and email are required.' });
+    }
+    if (!/^\d+$/.test(String(phone))) {
+      return res.status(400).json({ success: false, message: 'Phone number must contain numbers only.' });
+    }
 
     const branchResult = await pool.query(
       `INSERT INTO branches (org_id, name, code, contact_person, phone, email, address, latitude, longitude, geofence_radius) 
@@ -100,7 +113,10 @@ router.post('/', authMiddleware, async (req, res) => {
     let createdAdmin = null;
 
     // Optional Branch Admin Creation
-    if (createBranchAdmin && adminUsername && adminPassword) {
+    if (createBranchAdmin && (!adminUsername || !adminPassword || !adminFullName || !adminEmail)) {
+      return res.status(400).json({ success: false, message: 'Admin username, password, full name and email are required.' });
+    }
+    if (createBranchAdmin && adminUsername && adminPassword && adminFullName && adminEmail) {
       const existing = await pool.query('SELECT id FROM admin_users WHERE org_id = $1 AND LOWER(username) = LOWER($2)', [req.admin.orgId, adminUsername]);
       if (existing.rows.length === 0) {
         const hash = await bcrypt.hash(adminPassword, 10);
@@ -124,6 +140,12 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { name, code, contactPerson, phone, email, address, latitude, longitude, geofenceRadius, isActive } = req.body;
+    if (!name || !code || !contactPerson || !phone || !email) {
+      return res.status(400).json({ success: false, message: 'Branch name, code, contact person, phone and email are required.' });
+    }
+    if (!/^\d+$/.test(String(phone))) {
+      return res.status(400).json({ success: false, message: 'Phone number must contain numbers only.' });
+    }
     const result = await pool.query(
       `UPDATE branches SET 
         name = COALESCE($1, name), 
@@ -136,11 +158,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
         longitude = COALESCE($8, longitude),
         geofence_radius = COALESCE($9, geofence_radius),
         is_active = COALESCE($10, is_active)
-       WHERE id = $11 AND org_id = $12 RETURNING *`,
+      WHERE id = $11 AND org_id = $12${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $13' : ''} RETURNING *`,
       [
         name, code, contactPerson, phone, email, address, 
         latitude, longitude, geofenceRadius ? parseInt(geofenceRadius) : undefined, 
-        isActive, req.params.id, req.admin.orgId
+        isActive, req.params.id, req.admin.orgId,
+        ...(req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.admin.branchAccess] : [])
       ]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Branch not found.' });
@@ -154,7 +177,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // DELETE /api/branches/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM branches WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query(
+      `DELETE FROM branches WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $3' : ''}`,
+      req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
+    );
     res.json({ success: true, message: 'Branch deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

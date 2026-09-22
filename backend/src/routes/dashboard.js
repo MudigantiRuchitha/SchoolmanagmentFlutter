@@ -7,17 +7,19 @@ const { authMiddleware } = require('../middleware/auth');
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
     const orgId = req.admin.orgId;
+    const branchFilter = req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND branch_id = $2' : '';
+    const params = req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [orgId, req.admin.branchAccess] : [orgId];
     const result = await pool.query(`
       SELECT
-        (SELECT COUNT(*) FROM students WHERE org_id = $1 AND is_active = true) as total_students,
-        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true AND role_type = 'teaching') as teaching_staff,
-        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true AND role_type = 'non-teaching') as non_teaching_staff,
-        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true AND role_type = 'management') as management_staff,
-        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true) as total_staff,
+        (SELECT COUNT(*) FROM students WHERE org_id = $1 AND is_active = true${branchFilter}) as total_students,
+        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true AND role_type = 'teaching'${branchFilter}) as teaching_staff,
+        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true AND role_type = 'non-teaching'${branchFilter}) as non_teaching_staff,
+        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true AND role_type = 'management'${branchFilter}) as management_staff,
+        (SELECT COUNT(*) FROM staff WHERE org_id = $1 AND is_active = true${branchFilter}) as total_staff,
         (SELECT COUNT(*) FROM admin_users WHERE org_id = $1 AND is_active = true) as total_admins,
-        (SELECT COUNT(*) FROM classes WHERE org_id = $1 AND is_active = true) as total_classes,
-        (SELECT COUNT(*) FROM branches WHERE org_id = $1 AND is_active = true) as total_branches
-    `, [orgId]);
+        (SELECT COUNT(*) FROM classes WHERE org_id = $1 AND is_active = true${branchFilter}) as total_classes,
+        (SELECT COUNT(*) FROM branches WHERE org_id = $1 AND is_active = true${branchFilter}) as total_branches
+    `, params);
 
     res.json({ success: true, stats: result.rows[0] });
   } catch (err) {
@@ -48,6 +50,12 @@ router.get('/attendance-today', authMiddleware, async (req, res) => {
       `;
       const params = [orgId, targetDate];
       let paramCount = 2;
+
+      if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
+        paramCount++;
+        query += ` AND s.branch_id = $${paramCount}`;
+        params.push(req.admin.branchAccess);
+      }
 
       if (branch_id) {
         paramCount++;
@@ -82,6 +90,12 @@ router.get('/attendance-today', authMiddleware, async (req, res) => {
       `;
       const params = [orgId, targetDate];
       let paramCount = 2;
+
+      if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
+        paramCount++;
+        query += ` AND s.branch_id = $${paramCount}`;
+        params.push(req.admin.branchAccess);
+      }
 
       if (branch_id) {
         paramCount++;

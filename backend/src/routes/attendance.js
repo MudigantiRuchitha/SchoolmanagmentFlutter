@@ -37,6 +37,8 @@ router.get('/students', authMiddleware, async (req, res) => {
       const params = [orgId, targetDate];
       let pc = 2;
 
+      if (req.admin.branchAccess && req.admin.branchAccess !== 'all') { pc++; query += ` AND s.branch_id = $${pc}`; params.push(req.admin.branchAccess); }
+
       if (branch_id) { pc++; query += ` AND s.branch_id = $${pc}`; params.push(branch_id); }
       if (class_id) { pc++; query += ` AND s.class_id = $${pc}`; params.push(class_id); }
       query += ' ORDER BY b.name, c.name, s.roll_no, s.full_name';
@@ -44,6 +46,10 @@ router.get('/students', authMiddleware, async (req, res) => {
       const result = await pool.query(query, params);
       const periodParams = [orgId, targetDate];
       let periodFilters = '';
+      if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
+        periodParams.push(req.admin.branchAccess);
+        periodFilters += ` AND s.branch_id = $${periodParams.length}`;
+      }
       if (branch_id) {
         periodParams.push(branch_id);
         periodFilters += ` AND s.branch_id = $${periodParams.length}`;
@@ -154,6 +160,8 @@ router.get('/students', authMiddleware, async (req, res) => {
     const params = [orgId, from_date, to_date];
     let pc = 3;
 
+    if (req.admin.branchAccess && req.admin.branchAccess !== 'all') { pc++; query += ` AND s.branch_id = $${pc}`; params.push(req.admin.branchAccess); }
+
     if (branch_id) { pc++; query += ` AND s.branch_id = $${pc}`; params.push(branch_id); }
     if (class_id) { pc++; query += ` AND s.class_id = $${pc}`; params.push(class_id); }
     query += ' GROUP BY s.id, c.name, c.section, b.name ORDER BY b.name, c.name, s.full_name';
@@ -225,6 +233,8 @@ router.get('/staff', authMiddleware, async (req, res) => {
       const params = [orgId, targetDate];
       let pc = 2;
 
+      if (req.admin.branchAccess && req.admin.branchAccess !== 'all') { pc++; query += ` AND s.branch_id = $${pc}`; params.push(req.admin.branchAccess); }
+
       if (branch_id) { pc++; query += ` AND s.branch_id = $${pc}`; params.push(branch_id); }
       if (role_type) { pc++; query += ` AND s.role_type = $${pc}`; params.push(role_type); }
       query += ' ORDER BY b.name, s.full_name';
@@ -248,6 +258,8 @@ router.get('/staff', authMiddleware, async (req, res) => {
       WHERE s.org_id = $1 AND s.is_active = true`;
     const params = [orgId, from_date, to_date];
     let pc = 3;
+
+    if (req.admin.branchAccess && req.admin.branchAccess !== 'all') { pc++; query += ` AND s.branch_id = $${pc}`; params.push(req.admin.branchAccess); }
 
     if (branch_id) { pc++; query += ` AND s.branch_id = $${pc}`; params.push(branch_id); }
     if (role_type) { pc++; query += ` AND s.role_type = $${pc}`; params.push(role_type); }

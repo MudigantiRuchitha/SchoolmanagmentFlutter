@@ -75,7 +75,7 @@ export default function Notices() {
 
   return (
     <Layout title="Notices" subtitle="Post and manage announcements for staff and students">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdAnnouncement style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       <div className="toolbar">
         <div className="toolbar-left">
@@ -88,9 +88,9 @@ export default function Notices() {
             />
           </div>
           <div className="tabs" style={{ marginBottom: 0 }}>
-            {['', 'all', 'staff', 'students'].map(a => (
-              <button key={a} className={`tab-btn ${filterAudience === a ? 'active' : ''}`} onClick={() => setFilterAudience(a)}>
-                {a === '' ? 'All' : a.charAt(0).toUpperCase() + a.slice(1)}
+            {['all', 'staff', 'students'].map(a => (
+              <button key={a} className={`tab-btn ${filterAudience === (a === 'all' ? '' : a) ? 'active' : ''}`} onClick={() => setFilterAudience(a === 'all' ? '' : a)}>
+                {a === 'all' ? 'All' : a.charAt(0).toUpperCase() + a.slice(1)}
               </button>
             ))}
           </div>
@@ -117,20 +117,19 @@ export default function Notices() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{n.title}</div>
                       <span className={`badge ${AUDIENCE_COLORS[n.audience] || 'badge-gray'}`}>
-                        {n.audience === 'all' ? '📢 All' : n.audience === 'staff' ? '👨‍🏫 Staff' : '🎓 Students'}
+                        {n.audience === 'all' ? 'All' : n.audience === 'staff' ? 'Staff' : 'Students'}
                       </span>
                     </div>
                     {n.content && (
                       <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10, whiteSpace: 'pre-wrap' }}>{n.content}</p>
                     )}
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 16 }}>
-                      <span>📅 Posted: {format(new Date(n.created_at), 'dd MMM yyyy, h:mm a')}</span>
-                      {n.created_by_name && <span>👤 By: {n.created_by_name}</span>}
+                      <span>Posted: {format(new Date(n.created_at), 'dd MMM yyyy, h:mm a')}</span>
+                      {n.created_by_name && <span>By: {n.created_by_name}</span>}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="btn btn-sm btn-secondary" onClick={() => openEdit(n)} title="Edit Notice"><MdEdit size={14} /></button>
-                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(n)} title="Delete Notice"><MdDelete size={14} /></button>
                   </div>
                 </div>
               </div>

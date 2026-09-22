@@ -8,8 +8,11 @@ const { authMiddleware } = require('../middleware/auth');
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, username, full_name, email, phone, role, branch_access, is_active, created_at FROM admin_users WHERE org_id = $1 ORDER BY created_at DESC',
-      [req.admin.orgId]
+      `SELECT id, username, full_name, email, phone, role, branch_access, is_active, created_at
+       FROM admin_users
+       WHERE org_id = $1${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND (branch_access = $2 OR branch_access = \'all\')' : ''}
+       ORDER BY created_at DESC`,
+      req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.admin.orgId, req.admin.branchAccess] : [req.admin.orgId]
     );
     res.json({ success: true, admins: result.rows });
   } catch (err) {

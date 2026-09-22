@@ -86,7 +86,7 @@ export default function Holidays() {
 
   return (
     <Layout title="Holidays" subtitle="Manage annual school holidays and calendar events">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24 }}>
         {/* Calendar */}
@@ -116,7 +116,7 @@ export default function Holidays() {
                     style={holiday ? { background: `${TYPE_COLORS[holiday.type]}20`, color: TYPE_COLORS[holiday.type], fontWeight: 700, cursor: 'pointer', borderRadius: 8, border: `1px solid ${TYPE_COLORS[holiday.type]}40` } : {}}
                     onClick={() => holiday && openEdit(holiday)}>
                     <span>{day}</span>
-                    {holiday && <span style={{ fontSize: 8, textAlign: 'center', lineHeight: 1, marginTop: 2 }}>🏖️</span>}
+                    {holiday && <span style={{ fontSize: 8, textAlign: 'center', lineHeight: 1, marginTop: 2 }}><MdCalendarToday /></span>}
                   </div>
                 );
               })}
@@ -137,7 +137,7 @@ export default function Holidays() {
         {/* Holiday List Panel */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">📋 Holiday List ({currentYear})</div>
+            <div className="card-title"><MdCalendarToday /> Holiday List ({currentYear})</div>
             <button className="btn btn-primary btn-sm" onClick={() => { setForm(emptyForm); setEditItem(null); setShowModal(true); }}>
               <MdAdd /> Add Holiday
             </button>
@@ -158,7 +158,7 @@ export default function Holidays() {
               <div className="loading-overlay" style={{ minHeight: 200 }}><div className="spinner" /></div>
             ) : filteredHolidays.length === 0 ? (
               <div className="empty-state" style={{ padding: 40 }}>
-                <div className="empty-state-icon">📅</div>
+                <div className="empty-state-icon"><MdCalendarToday /></div>
                 <div className="empty-state-title">No holidays found</div>
               </div>
             ) : filteredHolidays.map(h => (

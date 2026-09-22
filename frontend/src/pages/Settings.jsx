@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import { getSettings, updateSettings, changePassword } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { MdSave, MdBusiness, MdLock } from 'react-icons/md';
+import { MdSave, MdBusiness, MdLock, MdWarning } from 'react-icons/md';
 
 export default function Settings() {
   const [settings, setSettings] = useState(null);
@@ -61,7 +61,7 @@ export default function Settings() {
               <div style={{ padding: '12px 16px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', marginBottom: 20 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Organisation Code</div>
                 <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 18, color: 'var(--primary)' }}>{settings?.code?.toUpperCase()}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>⚠️ Code cannot be changed. Share this with your org admins.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}><MdWarning style={{ verticalAlign: 'middle', marginRight: 4 }} /> Code cannot be changed. Share this with your org admins.</div>
               </div>
 
               <div className="form-group"><label>Organisation Name</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
@@ -84,12 +84,12 @@ export default function Settings() {
             </div>
             <div className="card-body">
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>Keep your admin account secure by updating your password regularly.</p>
-              <button className="btn btn-secondary w-full" onClick={() => setShowPassModal(true)}>🔑 Change Password</button>
+              <button className="btn btn-secondary w-full" onClick={() => setShowPassModal(true)}><MdLock style={{ verticalAlign: 'middle', marginRight: 6 }} /> Change Password</button>
             </div>
           </div>
 
           <div className="card">
-            <div className="card-header"><div className="card-title">📋 Login Info</div></div>
+            <div className="card-header"><div className="card-title"><MdBusiness /> Login Info</div></div>
             <div className="card-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {[

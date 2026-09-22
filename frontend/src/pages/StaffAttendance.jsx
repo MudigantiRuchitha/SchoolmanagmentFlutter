@@ -4,6 +4,7 @@ import Modal from '../components/Modal';
 import { getStaffAttendance, markStaffAttendance, getBranches } from '../api';
 import { MdSave, MdFilterList, MdAccessTime, MdSearch, MdDownload, MdFingerprint } from 'react-icons/md';
 import { format } from 'date-fns';
+import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 
 export default function StaffAttendance() {
   const [records, setRecords] = useState([]);
@@ -12,7 +13,7 @@ export default function StaffAttendance() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [branchId, setBranchId] = useState('');
+  const [branchId, setBranchId] = useState(getBranchScope);
   const [roleType, setRoleType] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -24,7 +25,7 @@ export default function StaffAttendance() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  useEffect(() => { getBranches().then(r => setBranches(r.data.branches)).catch(() => {}); }, []);
+  useEffect(() => { getBranches().then(r => setBranches(filterBranches(r.data.branches || []))).catch(() => {}); }, []);
   useEffect(() => { fetchAttendance(); }, [date, branchId, roleType]);
 
   const fetchAttendance = async () => {
@@ -86,19 +87,29 @@ export default function StaffAttendance() {
   };
 
   const exportCSV = () => {
-    if (records.length === 0) return;
-    const headers = ['Date', 'Staff ID', 'Staff Name', 'Role', 'Branch', 'Check In', 'Check Out', 'Status'];
-    const rows = records.map(r => [
-      date, r.staff_id || '', `"${r.full_name}"`, r.role_type, `"${r.branch_name || ''}"`, getVal(r, 'check_in'), getVal(r, 'check_out'), getVal(r, 'status')
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `staff_attendance_${date}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      if (!records || records.length === 0) {
+        showToast('No rows to export. No staff attendance records are available for this selection.');
+        return;
+      }
+
+      const headers = ['Date', 'Staff ID', 'Staff Name', 'Role', 'Branch', 'Check In', 'Check Out', 'Status'];
+      const rows = records.map(r => [
+        date, r.staff_id || '', `"${r.full_name}"`, r.role_type, `"${r.branch_name || ''}"`, getVal(r, 'check_in'), getVal(r, 'check_out'), getVal(r, 'status')
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `staff_attendance_${date}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Staff attendance CSV exported successfully.');
+    } catch (error) {
+      console.error('Staff attendance CSV export failed:', error);
+      showToast('CSV export failed. Please try again.');
+    }
   };
 
   const filteredRecords = records.filter(r => {
@@ -135,7 +146,7 @@ export default function StaffAttendance() {
         )
       }
     >
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -147,7 +158,7 @@ export default function StaffAttendance() {
           </div>
 
           <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="">All Branches</option>
+            {!isDedicatedBranchUser() && <option value="">All Branches</option>}
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
           

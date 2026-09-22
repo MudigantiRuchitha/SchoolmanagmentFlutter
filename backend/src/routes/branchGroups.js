@@ -7,15 +7,18 @@ const { authMiddleware } = require('../middleware/auth');
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const groups = await pool.query(
-      'SELECT * FROM branch_groups WHERE org_id = $1 ORDER BY name',
-      [req.admin.orgId]
+      `SELECT * FROM branch_groups
+       WHERE org_id = $1
+       ${req.admin.branchAccess !== 'all' ? 'AND EXISTS (SELECT 1 FROM branch_group_members scoped_bgm WHERE scoped_bgm.group_id = branch_groups.id AND scoped_bgm.branch_id = $2)' : ''}
+       ORDER BY name`,
+      req.admin.branchAccess !== 'all' ? [req.admin.orgId, req.admin.branchAccess] : [req.admin.orgId]
     );
     // Get members for each group
     const result = await Promise.all(groups.rows.map(async (group) => {
       const members = await pool.query(
         `SELECT b.id, b.name, b.code FROM branch_group_members bgm
-         JOIN branches b ON b.id = bgm.branch_id WHERE bgm.group_id = $1`,
-        [group.id]
+         JOIN branches b ON b.id = bgm.branch_id WHERE bgm.group_id = $1${req.admin.branchAccess !== 'all' ? ' AND b.id = $2' : ''}`,
+        req.admin.branchAccess !== 'all' ? [group.id, req.admin.branchAccess] : [group.id]
       );
       return { ...group, branches: members.rows };
     }));
@@ -31,6 +34,7 @@ router.post('/', authMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, branchIds = [] } = req.body;
+    const scopedBranchIds = req.admin.branchAccess !== 'all' ? [Number(req.admin.branchAccess)] : branchIds;
     if (!name) return res.status(400).json({ success: false, message: 'Group name is required.' });
 
     await client.query('BEGIN');
@@ -40,7 +44,7 @@ router.post('/', authMiddleware, async (req, res) => {
     );
     const group = groupResult.rows[0];
 
-    for (const branchId of branchIds) {
+    for (const branchId of scopedBranchIds) {
       await client.query('INSERT INTO branch_group_members (group_id, branch_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [group.id, branchId]);
     }
 
@@ -60,6 +64,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, branchIds = [] } = req.body;
+    const scopedBranchIds = req.admin.branchAccess !== 'all' ? [Number(req.admin.branchAccess)] : branchIds;
     await client.query('BEGIN');
 
     const result = await client.query(
@@ -72,7 +77,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     }
 
     await client.query('DELETE FROM branch_group_members WHERE group_id = $1', [req.params.id]);
-    for (const branchId of branchIds) {
+    for (const branchId of scopedBranchIds) {
       await client.query('INSERT INTO branch_group_members (group_id, branch_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.params.id, branchId]);
     }
 

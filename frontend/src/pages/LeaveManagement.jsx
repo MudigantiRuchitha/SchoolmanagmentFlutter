@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import { useAuth } from '../context/AuthContext';
 import { getLeaves, applyLeave, updateLeave, deleteLeave, getLeaveTypes, createLeaveType, deleteLeaveType, getStaff } from '../api';
 import { MdAdd, MdCheck, MdClose, MdDelete, MdSearch, MdBeachAccess, MdFilterList, MdComment } from 'react-icons/md';
 import { format } from 'date-fns';
 
 export default function LeaveManagement() {
+  const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -22,10 +24,21 @@ export default function LeaveManagement() {
   const [reviewComment, setReviewComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [formError, setFormError] = useState('');
+  const [typeFormError, setTypeFormError] = useState('');
   const [form, setForm] = useState({ staffId: '', leaveTypeId: '', leaveTypeName: '', fromDate: '', toDate: '', reason: '' });
   const [typeForm, setTypeForm] = useState({ name: '', maxDays: 1 });
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  const isManagementRole = (value) => /principal|management/i.test(String(value || ''));
+  const isManagementUser = isManagementRole(user?.role) || isManagementRole(user?.fullName) || isManagementRole(user?.username);
+  const isManagementStaff = (member) => {
+    if (!member) return false;
+    return isManagementRole(member.designation) || isManagementRole(member.role_type) || isManagementRole(member.full_name) || isManagementRole(member.username);
+  };
+  const selectedStaff = staff.find(s => s.id == form.staffId);
+  const selectedStaffIsManagement = isManagementStaff(selectedStaff);
 
   useEffect(() => { fetchInit(); }, []);
   const fetchInit = async () => {
@@ -50,12 +63,23 @@ export default function LeaveManagement() {
 
   const handleApply = async (e) => {
     e.preventDefault();
+    if (!form.staffId || !form.fromDate || !form.toDate) {
+      setFormError('Please select a staff member and enter both the from and to dates.');
+      return;
+    }
+    if (form.toDate < form.fromDate) {
+      setFormError('The to date cannot be earlier than the from date.');
+      return;
+    }
+    setFormError('');
     setSaving(true);
     try {
       const lt = leaveTypes.find(l => l.id == form.leaveTypeId);
-      await applyLeave({ ...form, leaveTypeName: lt?.name || '' });
-      showToast('Leave application submitted!'); 
+      const leaveStatus = selectedStaffIsManagement ? 'informed' : 'pending';
+      await applyLeave({ ...form, leaveTypeName: lt?.name || '', status: leaveStatus });
+      showToast(leaveStatus === 'informed' ? 'Management leave informed successfully.' : 'Leave application submitted!'); 
       setShowApplyModal(false);
+      setFormError('');
       setForm({ staffId: '', leaveTypeId: '', leaveTypeName: '', fromDate: '', toDate: '', reason: '' });
       fetchInit();
     } catch (err) { showToast(err.response?.data?.message || 'Error occurred.'); }
@@ -90,11 +114,17 @@ export default function LeaveManagement() {
 
   const handleAddType = async (e) => {
     e.preventDefault();
+    if (!typeForm.name.trim()) {
+      setTypeFormError('Leave type name is required.');
+      return;
+    }
+    setTypeFormError('');
     setSaving(true);
     try { 
       await createLeaveType(typeForm); 
       showToast('New leave type added!'); 
       setTypeForm({ name: '', maxDays: 1 }); 
+      setTypeFormError('');
       fetchInit(); 
     } catch { showToast('Failed to add leave type.'); }
     setSaving(false);
@@ -108,7 +138,8 @@ export default function LeaveManagement() {
     } catch { showToast('Failed to delete leave type.'); }
   };
 
-  const statusBadge = (status) => ({ pending: 'badge-warning', approved: 'badge-success', rejected: 'badge-danger' }[status] || 'badge-gray');
+  const statusBadge = (status) => ({ pending: 'badge-warning', approved: 'badge-success', rejected: 'badge-danger', informed: 'badge-secondary' }[status] || 'badge-gray');
+  const statusLabel = (status) => ({ pending: 'Pending', approved: 'Approved', rejected: 'Rejected', informed: 'Informed' }[status] || status);
 
   const filteredLeaves = leaves.filter(l => {
     const matchesSearch = !search || 
@@ -120,7 +151,7 @@ export default function LeaveManagement() {
 
   return (
     <Layout title="Leave Management" subtitle="Review staff leave applications, approve/reject requests, and configure leave types">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheck style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Stats Cards */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
@@ -156,6 +187,7 @@ export default function LeaveManagement() {
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
+            <option value="informed">Informed</option>
           </select>
 
           <select className="input" style={{ width: 160, padding: '9px 10px', fontSize: 13 }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
@@ -165,8 +197,8 @@ export default function LeaveManagement() {
         </div>
 
         <div className="toolbar-right">
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowTypeModal(true)}>⚙️ Manage Leave Types</button>
-          <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}><MdAdd /> Apply Leave</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowTypeModal(true)}><MdFilterList style={{ verticalAlign: 'middle', marginRight: 6 }} /> Manage Leave Types</button>
+          <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}><MdAdd /> {isManagementUser ? 'Inform About Leave' : 'Apply Leave'}</button>
         </div>
       </div>
 
@@ -188,7 +220,11 @@ export default function LeaveManagement() {
                   <td style={{ fontSize: 13 }}>{l.to_date ? format(new Date(l.to_date), 'dd MMM yyyy') : '—'}</td>
                   <td><span className="badge badge-info">{l.total_days} day{l.total_days > 1 ? 's' : ''}</span></td>
                   <td style={{ fontSize: 13, maxWidth: 180 }} className="truncate" title={l.reason}>{l.reason || '—'}</td>
-                  <td><span className={`badge ${statusBadge(l.status)}`}>{l.status}</span></td>
+                  <td>
+                    {isManagementStaff(l) ? <span style={{ color: 'var(--text-muted)' }}>—</span> : (
+                      <span className={`badge ${statusBadge(l.status)}`}>{statusLabel(l.status)}</span>
+                    )}
+                  </td>
                   <td style={{ fontSize: 12 }}>
                     {l.reviewed_by_name && <div>By: {l.reviewed_by_name}</div>}
                     {l.review_comment && <div style={{ color: 'var(--text-muted)' }}>"{l.review_comment}"</div>}
@@ -196,13 +232,16 @@ export default function LeaveManagement() {
                   </td>
                   <td>
                     <div className="table-actions">
-                      {l.status === 'pending' && (
+                      {l.status === 'pending' && !isManagementStaff(l) && (
                         <>
                           <button className="btn btn-sm btn-success" onClick={() => openReviewModal(l, 'approved')} title="Approve Leave"><MdCheck size={14} /></button>
                           <button className="btn btn-sm btn-danger" onClick={() => openReviewModal(l, 'rejected')} title="Reject Leave"><MdClose size={14} /></button>
                         </>
                       )}
-                      <button className="btn btn-sm" style={{ background: '#f1f5f9', color: '#64748b' }} onClick={() => handleDelete(l.id)} title="Delete Request"><MdDelete size={14} /></button>
+                      {l.status !== 'informed' && !isManagementStaff(l) && (
+                        <button className="btn btn-sm" style={{ background: '#f1f5f9', color: '#64748b' }} onClick={() => handleDelete(l.id)} title="Delete Request"><MdDelete size={14} /></button>
+                      )}
+                      {l.status === 'informed' && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Inform only</span>}
                     </div>
                   </td>
                 </tr>
@@ -213,15 +252,26 @@ export default function LeaveManagement() {
       )}
 
       {/* Apply Leave Modal */}
-      <Modal isOpen={showApplyModal} onClose={() => setShowApplyModal(false)} title="Apply for Staff Leave"
-        footer={<><button className="btn btn-secondary" onClick={() => setShowApplyModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleApply} disabled={saving}>{saving ? 'Submitting...' : 'Submit Leave'}</button></>}>
+      <Modal isOpen={showApplyModal} onClose={() => { setShowApplyModal(false); setFormError(''); }} title={isManagementUser ? 'Inform About Leave' : 'Apply for Staff Leave'}
+        footer={<><button className="btn btn-secondary" onClick={() => setShowApplyModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleApply} disabled={saving}>{saving ? 'Submitting...' : isManagementUser ? 'Inform Leave' : 'Submit Leave'}</button></> }>
         <form onSubmit={handleApply}>
+          {formError && <div className="alert alert-danger" style={{ marginBottom: 12, color: '#b91c1c' }}>{formError}</div>}
+          {isManagementUser && (
+            <div className="alert alert-info" style={{ marginBottom: 12 }}>
+              Management leave is recorded as an informed leave and does not require approval or rejection.
+            </div>
+          )}
           <div className="form-group"><label>Staff Member *</label>
             <select className="input" value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })} required>
               <option value="">Select Staff</option>
               {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.role_type})</option>)}
             </select>
           </div>
+          {selectedStaffIsManagement && (
+            <div className="alert alert-warning" style={{ marginBottom: 12 }}>
+              This staff member is part of management. The leave will be recorded as informed, with no approval actions.
+            </div>
+          )}
           <div className="form-group"><label>Leave Type</label>
             <select className="input" value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: e.target.value })}>
               <option value="">Select Leave Type</option>
@@ -251,11 +301,12 @@ export default function LeaveManagement() {
       </Modal>
 
       {/* Manage Leave Types Modal */}
-      <Modal isOpen={showTypeModal} onClose={() => setShowTypeModal(false)} title="Manage Organisation Leave Types" size="lg"
+      <Modal isOpen={showTypeModal} onClose={() => { setShowTypeModal(false); setTypeFormError(''); }} title="Manage Organisation Leave Types" size="lg"
         footer={<button className="btn btn-secondary" onClick={() => setShowTypeModal(false)}>Close</button>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <form onSubmit={handleAddType} style={{ background: 'var(--bg)', padding: 16, borderRadius: 'var(--radius-sm)' }}>
             <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Add New Leave Type</h4>
+            {typeFormError && <div className="alert alert-danger" style={{ marginBottom: 12, color: '#b91c1c' }}>{typeFormError}</div>}
             <div className="form-row">
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Type Name *</label>

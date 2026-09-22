@@ -201,6 +201,16 @@ body {
   min-height: 100vh;
 }
 
+/* ==================== PAGE ICONS (BLACK & WHITE) ==================== */
+.main-content svg,
+.main-content .icon,
+.main-content [class*="icon"] {
+  color: #111827 !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+  filter: grayscale(1) contrast(1.2) !important;
+}
+
 /* ==================== HEADER ==================== */
 .header {
   height: var(--header-height);
@@ -626,12 +636,13 @@ tr:hover td { background: #fafafa; }
 .login-hero { position: relative; z-index: 1; max-width: 420px; }
 .login-hero-icon {
   width: 72px; height: 72px;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  background: linear-gradient(135deg, #0f172a, #334155);
   border-radius: 20px;
   display: flex; align-items: center; justify-content: center;
   font-size: 32px;
+  color: #fff;
   margin-bottom: 28px;
-  box-shadow: 0 20px 40px rgba(99,102,241,0.3);
+  box-shadow: 0 20px 40px rgba(15,23,42,0.2);
 }
 .login-hero-title { font-size: 36px; font-weight: 800; color: #fff; line-height: 1.2; margin-bottom: 16px; }
 .login-hero-sub { font-size: 16px; color: rgba(255,255,255,0.6); line-height: 1.6; }

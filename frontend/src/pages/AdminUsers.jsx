@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import { getAdmins, createAdmin, updateAdmin, deleteAdmin, getBranches } from '../api';
-import { MdAdd, MdEdit, MdDelete, MdSearch, MdAdminPanelSettings, MdCheckCircle, MdCancel, MdBusiness } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdSearch, MdAdminPanelSettings, MdCheckCircle, MdCancel, MdBusiness, MdVisibility } from 'react-icons/md';
+import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 
 const emptyForm = { username: '', password: '', fullName: '', email: '', phone: '', role: 'admin', branchAccess: 'all', newPassword: '', isActive: true };
 
@@ -14,6 +15,8 @@ export default function AdminUsers() {
   const [filterRole, setFilterRole] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewAdmin, setViewAdmin] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -28,7 +31,7 @@ export default function AdminUsers() {
     try {
       const [a, b] = await Promise.all([getAdmins(), getBranches()]);
       setAdmins(a.data.admins);
-      setBranches(b.data.branches);
+      setBranches(filterBranches(b.data.branches || []));
     } catch {}
     setLoading(false);
   };
@@ -109,13 +112,15 @@ export default function AdminUsers() {
     setShowModal(true);
   };
 
+  const openView = (a) => { setViewAdmin(a); setShowViewModal(true); };
+
   const getBranchBadge = (accessCode) => {
     if (!accessCode || accessCode === 'all') {
-      return <span className="badge badge-purple">🏢 All Branches</span>;
+      return <span className="badge badge-purple"><MdBusiness style={{ verticalAlign: 'middle', marginRight: 4 }} /> All Branches</span>;
     }
     const matchedBranch = branches.find(b => b.id.toString() === accessCode || b.code === accessCode || b.name === accessCode);
     if (matchedBranch) {
-      return <span className="badge badge-info">📍 {matchedBranch.name}</span>;
+      return <span className="badge badge-info"><MdBusiness style={{ verticalAlign: 'middle', marginRight: 4 }} /> {matchedBranch.name}</span>;
     }
     return <span className="badge badge-gray">{accessCode}</span>;
   };
@@ -140,33 +145,33 @@ export default function AdminUsers() {
 
   return (
     <Layout title="Admin Users" subtitle="Manage organisation administrators, assign roles, and set branch-specific access permissions">
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Top Stats */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}>🛡️</div>
+          <div className="stat-icon" style={{ background: '#fdf4ff', color: '#a855f7' }}><MdAdminPanelSettings /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.total}</div>
             <div className="stat-label">Total Admin Users</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}>✅</div>
+          <div className="stat-icon" style={{ background: '#f0fdf4', color: '#10b981' }}><MdCheckCircle /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#10b981' }}>{stats.active}</div>
             <div className="stat-label">Active Users</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}>👑</div>
+          <div className="stat-icon" style={{ background: '#eff6ff', color: '#3b82f6' }}><MdAdminPanelSettings /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#3b82f6' }}>{stats.admins}</div>
             <div className="stat-label">Full Admins</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#fff7ed', color: '#f97316' }}>💼</div>
+          <div className="stat-icon" style={{ background: '#fff7ed', color: '#f97316' }}><MdBusiness /></div>
           <div className="stat-info">
             <div className="stat-value" style={{ color: '#f97316' }}>{stats.managers}</div>
             <div className="stat-label">Managers</div>
@@ -191,7 +196,7 @@ export default function AdminUsers() {
             <option value="viewer">Viewer</option>
           </select>
           <select className="input" style={{ width: 160, padding: '9px 10px', fontSize: 13 }} value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)}>
-            <option value="">All Branches Access</option>
+            {!isDedicatedBranchUser() && <option value="">All Branches Access</option>}
             <option value="all">Organisation Wide (All)</option>
             {branches.map(b => <option key={b.id} value={b.id.toString()}>{b.name}</option>)}
           </select>
@@ -214,8 +219,8 @@ export default function AdminUsers() {
                   <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}>{a.username}</span></td>
                   <td><div style={{ fontWeight: 600 }}>{a.full_name || '—'}</div></td>
                   <td style={{ fontSize: 13 }}>
-                    {a.email && <div>✉️ {a.email}</div>}
-                    {a.phone && <div style={{ color: 'var(--text-muted)' }}>📞 {a.phone}</div>}
+                    {a.email && <div><MdBusiness style={{ verticalAlign: 'middle', marginRight: 4 }} /> {a.email}</div>}
+                    {a.phone && <div style={{ color: 'var(--text-muted)' }}><MdBusiness style={{ verticalAlign: 'middle', marginRight: 4 }} /> {a.phone}</div>}
                   </td>
                   <td>
                     <span className={`badge ${a.role === 'admin' ? 'badge-purple' : a.role === 'manager' ? 'badge-info' : 'badge-gray'}`}>
@@ -232,16 +237,7 @@ export default function AdminUsers() {
                   </td>
                   <td>
                     <div className="table-actions">
-                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(a)} title="Edit User"><MdEdit size={14} /></button>
-                      <button 
-                        className="btn btn-sm" 
-                        onClick={() => handleToggleStatus(a)} 
-                        title={a.is_active ? 'Deactivate User' : 'Activate User'}
-                        style={{ background: a.is_active ? '#fef3c7' : '#dcfce7', color: a.is_active ? '#d97706' : '#15803d' }}
-                      >
-                        {a.is_active ? <MdCancel size={14} /> : <MdCheckCircle size={14} />}
-                      </button>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a)} title="Delete User"><MdDelete size={14} /></button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => openView(a)} title="View user details and actions"><MdVisibility size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -250,6 +246,23 @@ export default function AdminUsers() {
           </table>
         </div>
       )}
+
+      <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title={viewAdmin ? `Admin User: ${viewAdmin.username}` : 'Admin User'} size="sm" footer={<button className="btn btn-secondary" onClick={() => setShowViewModal(false)}>Close</button>}>
+        {viewAdmin && <div>
+          <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+            <div><strong>Username:</strong> {viewAdmin.username}</div>
+            <div><strong>Full Name:</strong> {viewAdmin.full_name || '—'}</div>
+            <div><strong>Role:</strong> {viewAdmin.role}</div>
+            <div><strong>Branch Access:</strong> {viewAdmin.branch_access || 'all'}</div>
+            <div><strong>Status:</strong> {viewAdmin.is_active ? 'Active' : 'Inactive'}</div>
+          </div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <button className="btn btn-secondary" onClick={() => { setShowViewModal(false); openEdit(viewAdmin); }}><MdEdit /> Edit User</button>
+            <button className="btn" onClick={() => handleToggleStatus(viewAdmin)} style={{ background: viewAdmin.is_active ? '#fef3c7' : '#dcfce7', color: viewAdmin.is_active ? '#d97706' : '#15803d' }}><MdCancel /> {viewAdmin.is_active ? 'Deactivate User' : 'Activate User'}</button>
+            <button className="btn btn-danger" onClick={() => { setShowViewModal(false); handleDelete(viewAdmin); }}><MdDelete /> Delete User</button>
+          </div>
+        </div>}
+      </Modal>
 
       {/* Add / Edit Admin User Modal */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? `Edit Admin User: ${editItem.username}` : 'Add New Admin User'}
@@ -287,10 +300,10 @@ export default function AdminUsers() {
               onChange={(e) => setForm({ ...form, branchAccess: e.target.value })}
               required
             >
-              <option value="all">🏢 All Branches (Organisation Wide Access)</option>
+              {!isDedicatedBranchUser() && <option value="all">All Branches (Organisation Wide Access)</option>}
               {branches.map(b => (
                 <option key={b.id} value={b.id.toString()}>
-                  📍 {b.name} {b.code ? `(${b.code})` : ''}
+                  {b.name} {b.code ? `(${b.code})` : ''}
                 </option>
               ))}
             </select>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginAdmin } from '../api';
-import { MdSchool, MdPerson, MdLock, MdBusiness, MdLogin, MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import { MdSchool, MdPerson, MdLock, MdBusiness, MdLogin, MdVisibility, MdVisibilityOff, MdEventNote, MdPeople, MdCalendarToday, MdAnnouncement, MdWarning } from 'react-icons/md';
 
 export default function Login() {
   const [form, setForm] = useState({ orgCode: '', username: '', password: '' });
@@ -19,7 +19,7 @@ export default function Login() {
     try {
       const res = await loginAdmin(form);
       if (res.data.success) {
-        login(res.data.token, res.data.user, res.data.org);
+        await login(res.data.token, res.data.user, res.data.org);
         navigate('/dashboard');
       }
     } catch (err) {
@@ -33,17 +33,17 @@ export default function Login() {
     <div className="login-page">
       <div className="login-left">
         <div className="login-hero">
-          <div className="login-hero-icon">🏫</div>
+          <div className="login-hero-icon"><MdSchool /></div>
           <h1 className="login-hero-title">School Attendance Management System</h1>
           <p className="login-hero-sub">
             A complete solution for managing student and staff attendance, leaves, and school operations.
           </p>
           <div className="login-features">
             {[
-              { icon: '📊', text: 'Real-time attendance tracking & reports' },
-              { icon: '👥', text: 'Staff & student management' },
-              { icon: '📅', text: 'Leave & holiday management' },
-              { icon: '🔔', text: 'Notices & announcements' },
+              { icon: <MdEventNote />, text: 'Real-time attendance tracking & reports' },
+              { icon: <MdPeople />, text: 'Staff & student management' },
+              { icon: <MdCalendarToday />, text: 'Leave & holiday management' },
+              { icon: <MdAnnouncement />, text: 'Notices & announcements' },
             ].map((f, i) => (
               <div key={i} className="login-feature">
                 <div className="login-feature-icon">{f.icon}</div>
@@ -66,7 +66,7 @@ export default function Login() {
 
           {error && (
             <div className="login-alert login-alert-error">
-              ⚠️ {error}
+              <MdWarning style={{ verticalAlign: 'middle' }} /> {error}
             </div>
           )}
 
@@ -148,16 +148,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div style={{ marginTop: '24px', padding: '16px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-              Demo Credentials
-            </div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div>🏫 Org Code: <strong>vts</strong></div>
-              <div>👤 Username: <strong>venkat</strong></div>
-              <div>🔑 Password: <strong>Venkat@312</strong></div>
-            </div>
-          </div>
+          
 
           <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             Platform administrator?{' '}

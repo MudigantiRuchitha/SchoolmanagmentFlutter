@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import ClassSectionSelect from '../components/ClassSectionSelect';
 import { getStudentAttendance, markStudentAttendance, getBranches, getClasses } from '../api';
 import { MdSave, MdFilterList, MdSearch, MdDownload, MdCheckCircle, MdCancel } from 'react-icons/md';
 import { format } from 'date-fns';
+import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 
 export default function StudentAttendance() {
   const [records, setRecords] = useState([]);
@@ -14,7 +16,7 @@ export default function StudentAttendance() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [branchId, setBranchId] = useState('');
+  const [branchId, setBranchId] = useState(getBranchScope);
   const [classId, setClassId] = useState('');
   const [period, setPeriod] = useState('');
   const [search, setSearch] = useState('');
@@ -24,7 +26,7 @@ export default function StudentAttendance() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   useEffect(() => {
-    getBranches().then(r => setBranches(r.data.branches)).catch(() => { });
+    getBranches().then(r => setBranches(filterBranches(r.data.branches || []))).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -98,61 +100,67 @@ export default function StudentAttendance() {
   };
 
   const exportCSV = () => {
-    const flatRows = renderedPeriods.flatMap(periodKey => {
-      const group = periodGroups[periodKey] || [];
-      const periodClassGroups = group.reduce((acc, record) => {
-        const classKey = `${record.class_name || ''} ${record.section || ''}`.trim() || 'Unassigned Class';
-        acc[classKey] ||= [];
-        acc[classKey].push(record);
-        return acc;
-      }, {});
+    try {
+      const flatRows = renderedPeriods.flatMap(periodKey => {
+        const group = periodGroups[periodKey] || [];
+        const periodClassGroups = group.reduce((acc, record) => {
+          const classKey = `${record.class_name || ''} ${record.section || ''}`.trim() || 'Unassigned Class';
+          acc[classKey] ||= [];
+          acc[classKey].push(record);
+          return acc;
+        }, {});
 
-      return Object.keys(periodClassGroups).sort().flatMap(classKey => {
-        const classRows = periodClassGroups[classKey] || [];
-        return classRows.filter(record => {
-          const term = (search || '').trim().toLowerCase();
-          const hitsText = !term || `${record.full_name || ''} ${record.admission_no || ''} ${record.roll_no || ''} ${record.branch_name || ''} ${record.class_name || ''} ${record.section || ''}`.toLowerCase().includes(term);
-          const hitsStatus = !statusFilter || (record.status || 'absent') === statusFilter;
-          return hitsText && hitsStatus;
+        return Object.keys(periodClassGroups).sort().flatMap(classKey => {
+          const classRows = periodClassGroups[classKey] || [];
+          return classRows.filter(record => {
+            const term = (search || '').trim().toLowerCase();
+            const hitsText = !term || `${record.full_name || ''} ${record.admission_no || ''} ${record.roll_no || ''} ${record.branch_name || ''} ${record.class_name || ''} ${record.section || ''}`.toLowerCase().includes(term);
+            const hitsStatus = !statusFilter || (record.status || 'absent') === statusFilter;
+            return hitsText && hitsStatus;
+          });
         });
       });
-    });
 
-    if (flatRows.length === 0) {
-      showToast('No rows to export for the current filters.');
-      return;
+      if (flatRows.length === 0) {
+        showToast('No rows to export for the current filters. Please adjust the filters or date selection.');
+        return;
+      }
+
+      const headers = ['Date', 'Period', 'Class', 'Admission No', 'Student Name', 'Roll No', 'Branch', 'Punch Time', 'Status'];
+      const rows = flatRows.map(r => [
+        date,
+        String(r.period_number ?? r.period_name ?? 'Unassigned'),
+        `${r.class_name || ''} ${r.section || ''}`.trim(),
+        r.admission_no || '',
+        r.full_name || '',
+        r.roll_no || '',
+        r.branch_name || '',
+        r.check_in || '—',
+        r.status || 'present'
+      ]);
+
+      const csvRows = [headers, ...rows].map(row => {
+        return row.map(value => {
+          const safeValue = String(value ?? '');
+          return `"${safeValue.replace(/"/g, '""')}"`;
+        }).join(',');
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `student_attendance_${date}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Student attendance CSV exported successfully.');
+    } catch (error) {
+      console.error('Student attendance CSV export failed:', error);
+      showToast('CSV export failed. Please try again.');
     }
-
-    const headers = ['Date', 'Period', 'Class', 'Admission No', 'Student Name', 'Roll No', 'Branch', 'Punch Time', 'Status'];
-    const rows = flatRows.map(r => [
-      date,
-      String(r.period_number ?? r.period_name ?? 'Unassigned'),
-      `${r.class_name || ''} ${r.section || ''}`.trim(),
-      r.admission_no || '',
-      r.full_name || '',
-      r.roll_no || '',
-      r.branch_name || '',
-      r.check_in || '—',
-      r.status || 'present'
-    ]);
-
-    const csvRows = [headers, ...rows].map(row => {
-      return row.map(value => {
-        const safeValue = String(value ?? '');
-        return `"${safeValue.replace(/"/g, '""')}"`;
-      }).join(',');
-    });
-
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `student_attendance_${date}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const periodGroups = periodRecords.reduce((groups, record) => {
@@ -216,7 +224,7 @@ export default function StudentAttendance() {
         )
       }
     >
-      {toast && <div className="alert alert-success">✅ {toast}</div>}
+      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Filters & Control Bar */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -231,14 +239,18 @@ export default function StudentAttendance() {
           </div>
 
           <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="">All Branches</option>
+            {!isDedicatedBranchUser() && <option value="">All Branches</option>}
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
 
-          <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={classId} onChange={(e) => setClassId(e.target.value)}>
-            <option value="">All Classes</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.section}</option>)}
-          </select>
+          <ClassSectionSelect
+            classes={classes}
+            value={classId}
+            onChange={setClassId}
+            includeAll
+            classStyle={{ width: 160, padding: '7px 10px', fontSize: 13 }}
+            sectionStyle={{ width: 140, padding: '7px 10px', fontSize: 13 }}
+          />
 
           <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={period} onChange={(e) => setPeriod(e.target.value)}>
             <option value="">All Periods</option>
@@ -313,7 +325,7 @@ export default function StudentAttendance() {
               const absent = filteredRows.filter(r => (r.status || 'absent') === 'absent').length;
 
               return (
-                <div className="card" style={{ marginBottom: 20 }}>
+                <div key={`${periodKey}-${classKey}`} className="card" style={{ marginBottom: 20 }}>
                   <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>
