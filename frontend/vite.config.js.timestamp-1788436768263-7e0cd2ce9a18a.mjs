@@ -7,7 +7,7 @@ var vite_config_default = defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "https://acsdemo.co.in",
+        target: "http://localhost:5000",
         changeOrigin: true
       }
     }

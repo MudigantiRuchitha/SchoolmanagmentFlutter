@@ -10,6 +10,7 @@ import BranchGroups from './pages/BranchGroups';
 import AdminUsers from './pages/AdminUsers';
 import Settings from './pages/Settings';
 import AcademicGroups from './pages/AcademicGroups';
+import AcademicData from './pages/AcademicData';
 import Classes from './pages/Classes';
 import Staff from './pages/Staff';
 import Students from './pages/Students';
@@ -55,6 +56,7 @@ function AppRoutes() {
       <Route path="/admins" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/academic-groups" element={<ProtectedRoute><AcademicGroups /></ProtectedRoute>} />
+      <Route path="/academic-data" element={<ProtectedRoute><AcademicData /></ProtectedRoute>} />
       <Route path="/classes" element={<ProtectedRoute><Classes /></ProtectedRoute>} />
       <Route path="/staff" element={<ProtectedRoute><Staff /></ProtectedRoute>} />
       <Route path="/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />

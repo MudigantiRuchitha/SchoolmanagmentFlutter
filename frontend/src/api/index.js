@@ -151,4 +151,10 @@ export const createNotice = (data) => api.post('/notices', data);
 export const updateNotice = (id, data) => api.put(`/notices/${id}`, data);
 export const deleteNotice = (id) => api.delete(`/notices/${id}`);
 
+// Academic Data
+export const getAcademicYears = () => api.get('/academic-data/years');
+export const getAcademicClasses = (params) => api.get('/academic-data/classes', { params });
+export const getAcademicStudents = (params) => api.get('/academic-data/students', { params });
+export const getAcademicStaff = (params) => api.get('/academic-data/staff', { params });
+
 export default api;

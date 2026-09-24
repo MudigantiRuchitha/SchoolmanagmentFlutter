@@ -22,6 +22,16 @@ pgPool.query('ALTER TABLE classes ADD COLUMN IF NOT EXISTS teacher_ids INT[]').c
   console.error('Failed to add teacher_ids column to classes:', err.message);
 });
 
+// Auto-migration: Academic data columns on staff and classes
+pgPool.query(`
+  ALTER TABLE staff ADD COLUMN IF NOT EXISTS department VARCHAR(100);
+  ALTER TABLE staff ADD COLUMN IF NOT EXISTS subject VARCHAR(100);
+  ALTER TABLE staff ADD COLUMN IF NOT EXISTS academic_year VARCHAR(50) DEFAULT '2026-2027';
+  ALTER TABLE classes ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';
+`).catch(err => {
+  console.error('Failed to add academic data columns:', err.message);
+});
+
 pgPool.query(`
   CREATE TABLE IF NOT EXISTS student_attendance_raw_logs (
     id SERIAL PRIMARY KEY,

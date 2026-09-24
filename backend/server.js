@@ -70,6 +70,7 @@ app.use('/api/leaves', require('./src/routes/leaves'));
 app.use('/api/holidays', require('./src/routes/holidays'));
 app.use('/api/notices', require('./src/routes/notices'));
 app.use('/api/timetable', require('./src/routes/timetable'));
+app.use('/api/academic-data', require('./src/routes/academicData'));
 
 // ============================================================
 // MOBILE APP & ATTENDANCE DEVICE API ROUTER

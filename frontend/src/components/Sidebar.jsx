@@ -6,7 +6,7 @@ import {
   MdDashboard, MdBusiness, MdGroup, MdAdminPanelSettings, MdSettings,
   MdSchool, MdPeople, MdPersonAdd, MdEventNote, MdAccessTime,
   MdBeachAccess, MdCalendarToday, MdAnnouncement, MdLogout, MdWorkspaces,
-  MdCategory
+  MdCategory, MdMenuBook
 } from 'react-icons/md';
 
 const navItems = [
@@ -18,6 +18,9 @@ const navItems = [
     { to: '/branch-groups', icon: <MdWorkspaces />, label: 'Branch Groups' },
     { to: '/admins', icon: <MdAdminPanelSettings />, label: 'Admin Users' },
     { to: '/settings', icon: <MdSettings />, label: 'Settings' },
+  ]},
+  { section: 'Academic Administrator', items: [
+    { to: '/academic-data', icon: <MdMenuBook />, label: 'Academic Data' },
   ]},
   { section: 'Academic', items: [
     { to: '/academic-groups', icon: <MdCategory />, label: 'Academic Groups' },
