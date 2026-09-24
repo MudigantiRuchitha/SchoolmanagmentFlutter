@@ -81,6 +81,7 @@ export default function Classes() {
   // ==========================================================
 
   const [classes, setClasses] = useState([]);
+  const [allClasses, setAllClasses] = useState([]);
   const [groups, setGroups] = useState([]);
   const [branches, setBranches] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -114,6 +115,7 @@ export default function Classes() {
   const [form, setForm] = useState(emptyForm);
 
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
 
   // ==========================================================
@@ -148,15 +150,18 @@ export default function Classes() {
   // TOAST
   // ==========================================================
 
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState(null);
 
 
-  const showToast = (msg) => {
-    setToast(msg);
+  const showToast = (msg, type = 'success') => {
+    setToast({
+      message: typeof msg === 'string' ? msg : (msg?.message || 'Action completed'),
+      type
+    });
 
     setTimeout(() => {
-      setToast('');
-    }, 3000);
+      setToast(null);
+    }, 4000);
   };
 
 
@@ -187,12 +192,10 @@ export default function Classes() {
       ]);
 
 
-      // ------------------------------------------------------
-      // CLASSES
-      // ------------------------------------------------------
+      const rawClasses = c.data.classes || [];
+      setAllClasses(rawClasses);
 
-      const classRows = filterBranchItems(c.data.classes || []);
-
+      const classRows = filterBranchItems(rawClasses);
       setClasses(classRows);
 
 
@@ -210,51 +213,31 @@ export default function Classes() {
       // Class 12
       // ------------------------------------------------------
 
-      if (
-        c.data.classOptions &&
-        Array.isArray(c.data.classOptions) &&
-        c.data.classOptions.length > 0
-      ) {
+      const dbClassOptions = (c.data.classOptions && Array.isArray(c.data.classOptions))
+        ? c.data.classOptions
+            .map(item => {
+              if (typeof item === 'string') return item;
+              return item.className || item.class_name || item.name || '';
+            })
+            .filter(Boolean)
+            .map(name => String(name).trim())
+        : classRows
+            .map(item => item.class_name || item.name)
+            .filter(Boolean)
+            .map(name => String(name).trim());
 
-        const dbClassOptions = c.data.classOptions
-          .map(item => {
+      const combined = [...dbClassOptions, ...DEFAULT_CLASS_OPTIONS];
+      const seenNorm = new Set();
+      const uniqueClassOptions = [];
+      combined.forEach(opt => {
+        const norm = String(opt || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (norm && !seenNorm.has(norm)) {
+          seenNorm.add(norm);
+          uniqueClassOptions.push(opt);
+        }
+      });
 
-            if (typeof item === 'string') {
-              return item;
-            }
-
-            return item.className || item.class_name || item.name || '';
-          })
-          .filter(Boolean)
-          .map(name => String(name).trim());
-
-
-        const uniqueClassOptions = [
-          ...new Set(dbClassOptions)
-        ];
-
-
-        setClassOptions(uniqueClassOptions);
-
-      } else {
-
-        // Fallback
-        const dbClassNames = classRows
-          .map(item => item.class_name || item.name)
-          .filter(Boolean)
-          .map(name => String(name).trim());
-
-
-        const uniqueClassOptions = [
-          ...new Set([
-            ...DEFAULT_CLASS_OPTIONS,
-            ...dbClassNames
-          ])
-        ];
-
-
-        setClassOptions(uniqueClassOptions);
-      }
+      setClassOptions(uniqueClassOptions);
 
 
       // ------------------------------------------------------
@@ -401,47 +384,73 @@ export default function Classes() {
   }, [filterGroup, filterBranch]);
 
 
+  const normalizeString = (str) => {
+    return String(str || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  };
+
+  const isSectionExistingForClass = (className, sectionName, excludeId = null, branchId = null) => {
+    if (!className || !sectionName) return false;
+    const cNameNorm = normalizeString(className);
+    const sNameNorm = normalizeString(sectionName);
+    const targetBranch = branchId ? Number(branchId) : null;
+    const poolToCheck = allClasses.length > 0 ? allClasses : classes;
+
+    return poolToCheck.some(c => {
+      if (excludeId && c.id === excludeId) return false;
+      const rawName = normalizeString(c.class_name || c.name);
+      const rawSec = normalizeString(c.section);
+
+      if (rawSec !== sNameNorm) return false;
+
+      const cBranch = c.branch_id ? Number(c.branch_id) : null;
+      const sameBranch = targetBranch === null || cBranch === null || targetBranch === cBranch;
+      if (!sameBranch) return false;
+
+      if (rawName === cNameNorm) return true;
+
+      // Handle cases where section is suffix in class name, e.g. "class10a" vs "class10"
+      const strippedRawName = rawSec && rawName.endsWith(rawSec) ? rawName.slice(0, -rawSec.length) : rawName;
+      const strippedInputName = sNameNorm && cNameNorm.endsWith(sNameNorm) ? cNameNorm.slice(0, -sNameNorm.length) : cNameNorm;
+
+      return (
+        strippedRawName === strippedInputName ||
+        strippedRawName === cNameNorm ||
+        rawName === strippedInputName
+      );
+    });
+  };
+
+
   // ==========================================================
   // GET SECTIONS FOR SELECTED CLASS
   // ==========================================================
 
   const getSectionsForClass = (className) => {
-
     if (!className) {
-      return [];
+      return DEFAULT_SECTION_OPTIONS;
     }
 
+    const normTarget = normalizeString(className);
+    let matchingSections = [];
+    Object.keys(sectionsByClass).forEach(key => {
+      if (normalizeString(key) === normTarget) {
+        matchingSections = matchingSections.concat(sectionsByClass[key] || []);
+      }
+    });
 
-    const sections = sectionsByClass[className];
+    const dbSections = matchingSections
+      .map(item => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        return item.section || '';
+      })
+      .filter(Boolean)
+      .map(section => String(section).trim());
 
-
-    if (
-      sections &&
-      Array.isArray(sections) &&
-      sections.length > 0
-    ) {
-
-      return sections
-        .map(item => {
-
-          if (typeof item === 'string') {
-            return item;
-          }
-
-          return item.section || '';
-        })
-        .filter(Boolean)
-        .map(section => String(section).trim());
-
-    }
-
-
-    // --------------------------------------------------------
-    // If selected class does not yet have a section in DB,
-    // show default A-F options.
-    // --------------------------------------------------------
-
-    return DEFAULT_SECTION_OPTIONS;
+    return Array.from(new Set([...DEFAULT_SECTION_OPTIONS, ...dbSections]));
   };
 
 
@@ -450,56 +459,51 @@ export default function Classes() {
   // ==========================================================
 
   const handleSubmit = async (e) => {
-
     e.preventDefault();
+    setFormError('');
 
+    const trimmedName = (form.name || '').trim();
+    const trimmedSection = (form.section || '').trim();
 
-    if (!form.name.trim()) {
-
-      showToast('Class Name is required!');
-
+    if (!trimmedName) {
+      setFormError('Class Name is required!');
+      showToast('Class Name is required!', 'error');
       return;
     }
 
-
-    if (!form.section) {
-
-      showToast('Please select a Section!');
-
+    if (!trimmedSection) {
+      setFormError('Please select a Section!');
+      showToast('Please select a Section!', 'error');
       return;
     }
 
+    // Duplicate validation
+    if (isSectionExistingForClass(trimmedName, trimmedSection, editItem?.id, form.branchId)) {
+      const errMsg = `Class "${trimmedName}" with section "${trimmedSection}" already exists.`;
+      setFormError(errMsg);
+      showToast(errMsg, 'error');
+      return;
+    }
 
     const editingClass = editItem;
     setSaving(true);
 
-
     try {
-
       if (editItem) {
-
         await updateClass(
           editItem.id,
           form
         );
-
         showToast('Class updated!');
-
       } else {
-
         await createClass(form);
-
         showToast('Class created!');
-
       }
 
-
       setShowModal(false);
-
       setEditItem(null);
-
       setForm(emptyForm);
-
+      setFormError('');
 
       await fetchInit();
 
@@ -513,21 +517,16 @@ export default function Classes() {
         };
         returnToClassView(updatedClass);
       }
-
-
     } catch (error) {
-
       console.error(
         'Error saving class:',
         error
       );
 
-      showToast(
-        'Error occurred while saving class.'
-      );
-
+      const errMsg = error.response?.data?.message || 'Error occurred while saving class.';
+      setFormError(errMsg);
+      showToast(errMsg, 'error');
     }
-
 
     setSaving(false);
   };
@@ -572,6 +571,7 @@ export default function Classes() {
 
   const openEditClass = (c) => {
     setEditItem(c);
+    setFormError('');
     setForm({
       name: c.class_name || c.name || '',
       section: c.section || '',
@@ -589,6 +589,7 @@ export default function Classes() {
     setShowModal(false);
     setEditItem(null);
     setForm(emptyForm);
+    setFormError('');
     returnToClassView(classToView);
   };
 
@@ -814,8 +815,20 @@ export default function Classes() {
       ====================================================== */}
 
       {toast && (
-        <div className="alert alert-success">
-          <MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}
+        <div
+          className={`alert alert-${toast.type === 'error' ? 'danger' : 'success'}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}
+        >
+          {toast.type === 'error' ? (
+            <MdCancel size={18} />
+          ) : (
+            <MdCheckCircle size={18} />
+          )}
+          <span>{toast.message}</span>
         </div>
       )}
 
@@ -928,13 +941,10 @@ export default function Classes() {
         <button
           className="btn btn-primary"
           onClick={() => {
-
             setForm(emptyForm);
-
             setEditItem(null);
-
+            setFormError('');
             setShowModal(true);
-
           }}
         >
 
@@ -1312,7 +1322,22 @@ export default function Classes() {
       >
 
         <form onSubmit={handleSubmit}>
-
+          {formError && (
+            <div
+              className="alert alert-danger"
+              style={{
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 13,
+                fontWeight: 500
+              }}
+            >
+              <MdCancel size={18} />
+              <span>{formError}</span>
+            </div>
+          )}
 
           {/* =================================================
               CLASS + SECTION
@@ -1337,7 +1362,7 @@ export default function Classes() {
                 value={form.name}
 
                 onChange={(e) => {
-
+                  if (formError) setFormError('');
                   setForm({
 
                     ...form,
@@ -1385,7 +1410,7 @@ export default function Classes() {
             <div className="form-group">
 
               <label>
-                Section / Division
+                Section / Division *
               </label>
 
 
@@ -1396,7 +1421,7 @@ export default function Classes() {
                 value={form.section}
 
                 onChange={(e) => {
-
+                  if (formError) setFormError('');
                   setForm({
 
                     ...form,
@@ -1409,6 +1434,7 @@ export default function Classes() {
                 }}
 
                 disabled={!form.name}
+                required
 
               >
 
@@ -1419,18 +1445,22 @@ export default function Classes() {
 
                 {getSectionsForClass(
                   form.name
-                ).map(section => (
-
-                  <option
-                    key={section}
-                    value={section}
-                  >
-
-                    {section}
-
-                  </option>
-
-                ))}
+                ).map(section => {
+                  const alreadyExists = isSectionExistingForClass(
+                    form.name,
+                    section,
+                    editItem?.id,
+                    form.branchId
+                  );
+                  return (
+                    <option
+                      key={section}
+                      value={section}
+                    >
+                      {section} {alreadyExists ? '(Already exists)' : ''}
+                    </option>
+                  );
+                })}
 
               </select>
 

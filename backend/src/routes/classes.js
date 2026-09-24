@@ -232,7 +232,46 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const scopedBranchId = req.admin.branchAccess !== 'all'
       ? Number(req.admin.branchAccess)
-      : branchId;
+      : (branchId ? Number(branchId) : null);
+
+    const trimmedName = name.trim();
+    const trimmedSection = (section || '').trim();
+
+    // Check if class with same name and section already exists in this branch / org
+    const duplicateCheck = await pool.query(
+      `
+      SELECT id FROM classes
+      WHERE org_id = $1
+        AND (
+          $2::int IS NULL
+          OR branch_id = $2::int
+          OR branch_id IS NULL
+        )
+        AND (
+          REGEXP_REPLACE(LOWER(COALESCE(class_name, name)), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER($3), '[^a-z0-9]', '', 'g')
+          OR
+          TRIM(TRAILING REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g') FROM REGEXP_REPLACE(LOWER(COALESCE(class_name, name)), '[^a-z0-9]', '', 'g'))
+          =
+          TRIM(TRAILING REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g') FROM REGEXP_REPLACE(LOWER($3), '[^a-z0-9]', '', 'g'))
+        )
+        AND REGEXP_REPLACE(LOWER(COALESCE(section, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g')
+      LIMIT 1
+      `,
+      [
+        req.admin.orgId,
+        scopedBranchId,
+        trimmedName,
+        trimmedSection
+      ]
+    );
+
+    if (duplicateCheck.rows.length > 0) {
+      const secMsg = trimmedSection ? ` with section "${trimmedSection}"` : '';
+      return res.status(400).json({
+        success: false,
+        message: `Class "${trimmedName}"${secMsg} already exists.`
+      });
+    }
 
     const result = await pool.query(
       `
@@ -251,9 +290,9 @@ router.post('/', authMiddleware, async (req, res) => {
       `,
       [
         req.admin.orgId,
-        name,
-        name,
-        section || null,
+        trimmedName,
+        trimmedName,
+        trimmedSection || null,
         academicGroupId || null,
         scopedBranchId || null,
         primaryId,
@@ -292,6 +331,29 @@ router.put('/:id', authMiddleware, async (req, res) => {
       isActive
     } = req.body;
 
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid class ID.'
+      });
+    }
+
+    // Fetch existing class
+    const existingResult = await pool.query(
+      `SELECT * FROM classes WHERE id = $1 AND org_id = $2`,
+      [classId, req.admin.orgId]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Class not found.'
+      });
+    }
+
+    const currentClass = existingResult.rows[0];
+
     let idsArray = undefined;
 
     if (Array.isArray(teacherIds)) {
@@ -327,7 +389,50 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
     const scopedBranchId = req.admin.branchAccess !== 'all'
       ? Number(req.admin.branchAccess)
-      : branchId;
+      : (branchId !== undefined ? (branchId ? Number(branchId) : null) : currentClass.branch_id);
+
+    const targetName = name !== undefined && name !== null ? String(name).trim() : (currentClass.class_name || currentClass.name || '').trim();
+    const targetSection = section !== undefined && section !== null ? String(section).trim() : (currentClass.section || '').trim();
+
+    // Check duplicate if name, section, or branchId is modified
+    if (name !== undefined || section !== undefined || branchId !== undefined) {
+      const duplicateCheck = await pool.query(
+        `
+        SELECT id FROM classes
+        WHERE org_id = $1
+          AND (
+            $2::int IS NULL
+            OR branch_id = $2::int
+            OR branch_id IS NULL
+          )
+          AND (
+            REGEXP_REPLACE(LOWER(COALESCE(class_name, name)), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER($3), '[^a-z0-9]', '', 'g')
+            OR
+            TRIM(TRAILING REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g') FROM REGEXP_REPLACE(LOWER(COALESCE(class_name, name)), '[^a-z0-9]', '', 'g'))
+            =
+            TRIM(TRAILING REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g') FROM REGEXP_REPLACE(LOWER($3), '[^a-z0-9]', '', 'g'))
+          )
+          AND REGEXP_REPLACE(LOWER(COALESCE(section, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g')
+          AND id != $5
+        LIMIT 1
+        `,
+        [
+          req.admin.orgId,
+          scopedBranchId,
+          targetName,
+          targetSection,
+          classId
+        ]
+      );
+
+      if (duplicateCheck.rows.length > 0) {
+        const secMsg = targetSection ? ` with section "${targetSection}"` : '';
+        return res.status(400).json({
+          success: false,
+          message: `Class "${targetName}"${secMsg} already exists.`
+        });
+      }
+    }
 
     const result = await pool.query(
       `

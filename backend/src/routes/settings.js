@@ -8,7 +8,13 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, code, domain, logo_url, address, phone, email, timetable_access, allowed_attendance_mode FROM organisations WHERE id = $1', [req.admin.orgId]);
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Organisation not found.' });
-    res.json({ success: true, settings: result.rows[0] });
+    const settings = result.rows[0];
+    if (settings.allowed_attendance_mode) {
+      settings.allowed_attendance_mode = settings.allowed_attendance_mode.toUpperCase();
+    } else {
+      settings.allowed_attendance_mode = 'BOTH';
+    }
+    res.json({ success: true, settings });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
   }

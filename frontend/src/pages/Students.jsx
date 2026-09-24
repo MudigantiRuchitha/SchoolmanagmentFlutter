@@ -7,7 +7,7 @@ import ClassSectionSelect from '../components/ClassSectionSelect';
 import { getStudents, createStudent, updateStudent, deleteStudent, getBranches, getClasses, bulkImportStudents } from '../api';
 import { 
   MdAdd, MdEdit, MdDelete, MdSearch, MdPersonAdd, MdDownload, MdUpload,
-  MdCheckCircle, MdCancel, MdVisibility, MdPeople, MdPerson, MdFilePresent 
+  MdCheckCircle, MdCancel, MdVisibility, MdPeople, MdPerson, MdFilePresent, MdWarning 
 } from 'react-icons/md';
 
 const emptyForm = { 
@@ -51,6 +51,7 @@ export default function Students() {
   const fileInputRef = useRef(null);
 
   const [toast, setToast] = useState('');
+  const [importError, setImportError] = useState('');
 
   const filterBranchScoped = (items) => {
     if (!user?.branchAccess || user.branchAccess === 'all') return items;
@@ -281,6 +282,8 @@ export default function Students() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    setImportError('');
     setImportFileName(file.name);
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -318,21 +321,64 @@ export default function Students() {
 
   const handleConfirmImport = async () => {
     if (importRows.length === 0) {
-      showToast('Please upload a valid CSV file first.');
+      setImportError('Please upload a valid CSV file first.');
       return;
     }
+
+    setImportError('');
     setImporting(true);
+
+    const getImportErrorMessage = (data) => {
+      if (!data) return 'Failed to import students.';
+
+      const messages = [];
+
+      if (Array.isArray(data.errors)) {
+        data.errors.forEach((error) => {
+          if (typeof error === 'string') {
+            messages.push(error);
+          } else if (error && typeof error === 'object') {
+            messages.push(
+              error.message ||
+              error.error ||
+              error.reason ||
+              JSON.stringify(error)
+            );
+          }
+        });
+      }
+
+      return messages.length > 0
+        ? messages.join('\\n')
+        : (data.message || 'Failed to import students.');
+    };
+
     try {
       const res = await bulkImportStudents({ students: importRows });
-      showToast(res.data.message || `Successfully imported ${res.data.importedCount} students!`);
+      const responseData = res.data || {};
+
+      if (Array.isArray(responseData.errors) && responseData.errors.length > 0) {
+        setImportError(getImportErrorMessage(responseData));
+        fetchInit();
+        return;
+      }
+
+      showToast(
+        responseData.message ||
+        `Successfully imported ${responseData.importedCount || importRows.length} students!`
+      );
+
       setShowImportModal(false);
       setImportRows([]);
       setImportFileName('');
+      setImportError('');
       fetchInit();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to import students.');
+      console.error('Student import failed:', err);
+      setImportError(getImportErrorMessage(err.response?.data));
+    } finally {
+      setImporting(false);
     }
-    setImporting(false);
   };
 
   const filtered = students.filter(s => 
@@ -424,7 +470,15 @@ export default function Students() {
           <button className="btn btn-secondary btn-sm" onClick={downloadSampleCSV} title="Download Sample CSV Template" style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
             <MdDownload size={14} /> Sample CSV
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowImportModal(true)} title="Import Students from CSV" style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setImportError('');
+              setShowImportModal(true);
+            }}
+            title="Import Students from CSV"
+            style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}
+          >
             <MdUpload size={14} /> Import Students
           </button>
           <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export CSV" style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
@@ -650,12 +704,28 @@ export default function Students() {
       {/* Bulk Import Students Modal */}
       <Modal
         isOpen={showImportModal}
-        onClose={() => { setShowImportModal(false); setImportRows([]); setImportFileName(''); }}
+        onClose={() => {
+          setShowImportModal(false);
+          setImportRows([]);
+          setImportFileName('');
+          setImportError('');
+        }}
         title="Import Students from CSV"
         size="lg"
         footer={
           <>
-            <button type="button" className="btn btn-secondary" onClick={() => { setShowImportModal(false); setImportRows([]); setImportFileName(''); }}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setShowImportModal(false);
+                setImportRows([]);
+                setImportFileName('');
+                setImportError('');
+              }}
+            >
+              Cancel
+            </button>
             <button 
               type="button" 
               className="btn btn-primary" 
@@ -668,6 +738,43 @@ export default function Students() {
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {importError && (
+            <div
+              style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderLeft: '4px solid #ef4444',
+                borderRadius: 8,
+                padding: '12px 14px',
+                color: '#991b1b'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  marginBottom: 6
+                }}
+              >
+                <MdWarning size={18} />
+                Import Failed
+              </div>
+
+              <div
+                style={{
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-line'
+                }}
+              >
+                {importError}
+              </div>
+            </div>
+          )}
+
           <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14 }}>1. Download Sample CSV Template</div>

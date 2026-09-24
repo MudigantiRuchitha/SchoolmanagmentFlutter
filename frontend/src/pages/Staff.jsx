@@ -125,7 +125,6 @@ export default function Staff() {
     // Import Staff Modal
     const [showImportModal, setShowImportModal] = useState(false);
     const [importRows, setImportRows] = useState([]);
-    const [duplicateRows, setDuplicateRows] = useState([]);
     const [importing, setImporting] = useState(false);
     const [importFileName, setImportFileName] = useState('');
     const [importError, setImportError] = useState('');
@@ -545,196 +544,148 @@ export default function Staff() {
         link.remove();
         URL.revokeObjectURL(url);
     };
-    const handleFileUpload = e => {
+    const handleFileUpload = (e) => {
         const file = e.target.files?.[0];
-        // Allow selecting the same file again after clearing.
         if (e.target) {
             e.target.value = '';
         }
         if (!file) {
             return;
         }
-        if (!/\.csv$/i.test(file.name)) {
-            setImportError('Please select a CSV file.');
-            setImportFileName('');
-            return;
-        }
+
         setImportError('');
         setImportFileName(file.name);
-        setDuplicateRows([]);
-        setImportRows([]);
         const reader = new FileReader();
-        reader.onload = event => {
+        reader.onload = (event) => {
             try {
-                const text = String(event.target?.result || '')
-                    .replace(/^\uFEFF/, '');
-                const rows = parseCSV(text);
-                if (rows.length < 2) {
-                    setImportError('CSV file is empty or missing data rows.');
+                const text = String(event.target?.result || '').replace(/^\uFEFF/, '');
+                const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
+                if (lines.length < 2) {
+                    showToast('CSV file is empty or missing headers.');
                     return;
                 }
-                const headers = rows[0].map(normalizeHeader);
-                const headerIndex = {};
-                headers.forEach((header, index) => {
-                    if (header) {
-                        headerIndex[header] = index;
-                    }
-                });
-                const getCell = (row, ...names) => {
-                    for (const name of names) {
-                        const index = headerIndex[normalizeHeader(name)];
-                        if (index !== undefined) {
-                            return String(row[index] ?? '').trim();
+
+                const headers = lines[0].split(',').map(c => normalizeHeader(c.replace(/^"|"$/g, '')));
+                const hasStaffIdHeader = headers.some(h => h.includes('staff') || h.includes('id'));
+
+                const getVal = (row, ...aliases) => {
+                    for (const alias of aliases) {
+                        const idx = headers.indexOf(normalizeHeader(alias));
+                        if (idx !== -1 && row[idx] !== undefined) {
+                            return String(row[idx]).trim();
                         }
                     }
                     return '';
                 };
+
                 const parsed = [];
-                const rowErrors = [];
-                rows.slice(1).forEach((row, index) => {
-                    const staffId = getCell(row, 'Staff ID', 'staff_id');
-                    if (!staffId) {
-                        rowErrors.push(`Row ${index + 2}: Staff ID is required.`);
-                        return;
-                    }
-                    const firstName = getCell(row, 'First Name', 'first_name');
-                    const lastName = getCell(row, 'Last Name', 'last_name');
-                    if (!firstName || !lastName) {
-                        rowErrors.push(`Row ${index + 2}: First Name and Last Name are required.`);
-                        return;
-                    }
-                    const roleType = (getCell(row, 'Role Type', 'role_type') ||
-                        'teaching').toLowerCase();
-                    if (!ROLES.includes(roleType)) {
-                        rowErrors.push(`Row ${index + 2}: Invalid role "${roleType}".`);
-                        return;
-                    }
-                    const phone = getCell(row, 'Phone', 'phone');
-                    if (phone && cleanPhoneNumber(phone).length !== 10) {
-                        rowErrors.push(`Row ${index + 2}: Phone number must contain exactly 10 digits.`);
-                        return;
-                    }
-                    const email = getCell(row, 'Email', 'email');
-                    if (email &&
-                        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                        rowErrors.push(`Row ${index + 2}: Invalid email address.`);
-                        return;
-                    }
+                for (let i = 1; i < lines.length; i++) {
+                    const row = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                    if (row.length < 2 || row.every(c => !c)) continue;
+
+                    let staffId = hasStaffIdHeader ? getVal(row, 'staff_id', 'staff id', 'id') : (row[0] || '');
+                    let firstName = hasStaffIdHeader ? getVal(row, 'first_name', 'first name') : (row[1] || '');
+                    let lastName = hasStaffIdHeader ? getVal(row, 'last_name', 'last name') : (row[2] || '');
+                    let username = hasStaffIdHeader ? getVal(row, 'username', 'user name') : (row[3] || '');
+                    let roleType = (hasStaffIdHeader ? getVal(row, 'role_type', 'role type', 'role') : row[4]) || 'teaching';
+                    let designation = hasStaffIdHeader ? getVal(row, 'designation') : (row[5] || '');
+                    let branchName = hasStaffIdHeader ? getVal(row, 'branch_name', 'branch name', 'branch') : (row[6] || '');
+                    let phone = hasStaffIdHeader ? getVal(row, 'phone', 'mobile') : (row[7] || '');
+                    let email = hasStaffIdHeader ? getVal(row, 'email') : (row[8] || '');
+                    let gender = hasStaffIdHeader ? getVal(row, 'gender') : (row[9] || '');
+                    let dateOfJoining = hasStaffIdHeader ? getVal(row, 'date_of_joining', 'date of joining', 'date of joining yyyy mm dd') : (row[10] || '');
+                    let password = (hasStaffIdHeader ? getVal(row, 'password') : row[11]) || 'Teacher@123';
+
                     parsed.push({
                         staffId,
                         firstName,
                         lastName,
                         fullName: `${firstName} ${lastName}`.trim(),
-                        username: getCell(row, 'Username', 'username'),
-                        roleType,
-                        designation: getCell(row, 'Designation', 'designation'),
-                        branchName: getCell(row, 'Branch Name', 'Branch', 'branch_name', 'branch'),
+                        username,
+                        roleType: roleType.toLowerCase(),
+                        designation,
+                        branchName,
                         phone: cleanPhoneNumber(phone),
                         email,
-                        gender: getCell(row, 'Gender', 'gender'),
-                        dateOfJoining: getCell(row, 'Date of Joining YYYY-MM-DD', 'Date of Joining', 'date_of_joining'),
-                        password: getCell(row, 'Password', 'password') ||
-                            'Teacher@123'
+                        gender,
+                        dateOfJoining,
+                        password
                     });
-                });
-                const existingStaffIds = new Set(staff
-                    .map(s => normalizeStaffId(s.staff_id))
-                    .filter(Boolean));
-                const csvStaffIds = new Set();
-                const newRows = [];
-                const duplicates = [];
-                parsed.forEach(row => {
-                    const normalizedId = normalizeStaffId(row.staffId);
-                    if (existingStaffIds.has(normalizedId)) {
-                        duplicates.push({
-                            ...row,
-                            duplicateReason: 'Already exists'
-                        });
-                        return;
-                    }
-                    if (csvStaffIds.has(normalizedId)) {
-                        duplicates.push({
-                            ...row,
-                            duplicateReason: 'Duplicate in CSV'
-                        });
-                        return;
-                    }
-                    csvStaffIds.add(normalizedId);
-                    newRows.push(row);
-                });
-                setImportRows(newRows);
-                setDuplicateRows(duplicates);
-                if (rowErrors.length) {
-                    setImportError(`${rowErrors.length} row(s) could not be prepared for import. ` +
-                        rowErrors.slice(0, 5).join(' '));
                 }
-                if (duplicates.length > 0 && newRows.length > 0) {
-                    showToast(`${duplicates.length} duplicate staff ID(s) skipped. ` +
-                        `${newRows.length} new staff member(s) ready to import.`);
-                }
-                else if (duplicates.length > 0 &&
-                    newRows.length === 0) {
-                    showToast(`All ${duplicates.length} staff record(s) are duplicates. Nothing new to import.`);
-                }
-                else if (newRows.length > 0) {
-                    showToast(`${newRows.length} new staff member(s) ready to import.`);
-                }
-            }
-            catch (error) {
-                console.error('CSV parsing failed:', error);
-                setImportRows([]);
-                setDuplicateRows([]);
-                setImportError('Unable to read this CSV file. Please use the downloaded template.');
+                setImportRows(parsed);
+            } catch (err) {
+                console.error('CSV parse error:', err);
+                setImportError('Failed to parse CSV file.');
             }
         };
-        reader.onerror = () => {
-            setImportRows([]);
-            setDuplicateRows([]);
-            setImportError('Unable to read the selected CSV file.');
-        };
-        reader.readAsText(file, 'UTF-8');
+        reader.readAsText(file);
     };
+
     const handleConfirmImport = async () => {
         if (importRows.length === 0) {
-            showToast(duplicateRows.length > 0
-                ? 'All uploaded Staff IDs are duplicates. Nothing new to import.'
-                : 'Please upload a valid CSV file first.');
+            setImportError('Please upload a valid CSV file first.');
             return;
         }
-        setImporting(true);
+
         setImportError('');
+        setImporting(true);
+
+        const getImportErrorMessage = (data) => {
+            if (!data) return 'Failed to import staff.';
+
+            const messages = [];
+
+            if (Array.isArray(data.errors)) {
+                data.errors.forEach((error) => {
+                    if (typeof error === 'string') {
+                        messages.push(error);
+                    } else if (error && typeof error === 'object') {
+                        messages.push(
+                            error.message ||
+                            error.error ||
+                            error.reason ||
+                            JSON.stringify(error)
+                        );
+                    }
+                });
+            }
+
+            return messages.length > 0
+                ? messages.join('\n')
+                : (data.message || 'Failed to import staff.');
+        };
+
         try {
             const branchScope = getBranchScope();
             const branchNameForScope = branches.find(b => normalizeId(b.id) === normalizeId(branchScope))?.name || '';
             const rowsToImport = importRows.map(row => ({
                 ...row,
-                ...(isDedicatedBranchUser() && branchNameForScope
-                    ? { branchName: branchNameForScope }
-                    : {})
+                ...(isDedicatedBranchUser() && branchNameForScope ? { branchName: branchNameForScope } : {})
             }));
-            const res = await bulkImportStaff({
-                staff: rowsToImport
-            });
-            const importedCount = res?.data?.importedCount ?? rowsToImport.length;
-            showToast(`${importedCount} new staff member(s) imported successfully. ` +
-                `${duplicateRows.length} duplicate(s) skipped.`);
+
+            const res = await bulkImportStaff({ staff: rowsToImport });
+            const responseData = res.data || {};
+
+            if (Array.isArray(responseData.errors) && responseData.errors.length > 0 && (!responseData.importedCount || responseData.importedCount === 0)) {
+                setImportError(getImportErrorMessage(responseData));
+                fetchInit();
+                return;
+            }
+
+            showToast(
+                responseData.message ||
+                `Successfully imported ${responseData.importedCount || rowsToImport.length} staff member(s)!`
+            );
+
             setShowImportModal(false);
             setImportRows([]);
-            setDuplicateRows([]);
             setImportFileName('');
             setImportError('');
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-            await fetchInit();
-        }
-        catch (err) {
-            const message = err.response?.data?.message ||
-                err.message ||
-                'Failed to import staff members.';
-            setImportError(message);
-        }
-        finally {
+            fetchInit();
+        } catch (err) {
+            console.error('Staff import failed:', err);
+            setImportError(getImportErrorMessage(err.response?.data));
+        } finally {
             setImporting(false);
         }
     };
@@ -968,7 +919,6 @@ export default function Staff() {
         <button className="btn btn-secondary btn-sm" onClick={() => {
             setImportError('');
             setImportRows([]);
-            setDuplicateRows([]);
             setImportFileName('');
             setShowImportModal(true);
         }} title="Import Staff from CSV" style={{
@@ -1667,390 +1617,235 @@ export default function Staff() {
       </Modal>
 
       {/* Bulk Import Staff Modal */}
-      <Modal isOpen={showImportModal} onClose={() => {
-            setShowImportModal(false);
-            setImportRows([]);
-            setDuplicateRows([]);
-            setImportFileName('');
-            setImportError('');
-        }} title="Import Staff Members from CSV" size="lg" footer={<>
-            <button type="button" className="btn btn-secondary" onClick={() => {
+      <Modal
+        isOpen={showImportModal}
+        onClose={() => {
+          setShowImportModal(false);
+          setImportRows([]);
+          setImportFileName('');
+          setImportError('');
+        }}
+        title="Import Staff Members from CSV"
+        size="lg"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
                 setShowImportModal(false);
                 setImportRows([]);
-                setDuplicateRows([]);
                 setImportFileName('');
                 setImportError('');
-            }}>
+              }}
+            >
               Cancel
             </button>
-
-            <button type="button" className="btn btn-primary" onClick={handleConfirmImport} disabled={importing ||
-                importRows.length === 0}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleConfirmImport}
+              disabled={importing || importRows.length === 0}
+            >
               {importing
                 ? 'Importing...'
                 : `Import ${importRows.length} Staff Members`}
             </button>
-          </>}>
-        <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16
-        }}>
-          {importError && (<div style={{
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {importError && (
+            <div
+              style={{
                 background: '#fef2f2',
                 border: '1px solid #fecaca',
-                color: '#b91c1c',
+                borderLeft: '4px solid #ef4444',
                 borderRadius: 8,
                 padding: '12px 14px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 8,
-                fontSize: 13,
-                lineHeight: 1.5
-            }}>
-              <MdWarning size={18} style={{
-                flexShrink: 0,
-                marginTop: 1
-            }}/>
-
-              <div style={{ flex: 1 }}>
-                <div style={{
-                fontWeight: 700,
-                marginBottom: 2
-            }}>
-                  Import failed
-                </div>
-
-                <div>
-                  {importError}
-                </div>
+                color: '#991b1b'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  marginBottom: 6
+                }}
+              >
+                <MdWarning size={18} />
+                Import Failed
               </div>
 
-              <button type="button" onClick={() => setImportError('')} style={{
-                border: 'none',
-                background: 'transparent',
-                color: '#b91c1c',
-                cursor: 'pointer',
-                fontSize: 18,
-                lineHeight: 1,
-                padding: 0
-            }} title="Dismiss">
-                ×
-              </button>
-            </div>)}
+              <div
+                style={{
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-line'
+                }}
+              >
+                {importError}
+              </div>
+            </div>
+          )}
 
-          {/* Step 1 */}
-          <div style={{
-            background: '#f8fafc',
-            padding: 16,
-            borderRadius: 8,
-            border: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-        }}>
+          <div
+            style={{
+              background: '#f8fafc',
+              padding: 16,
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
             <div>
-              <div style={{
-            fontWeight: 700,
-            fontSize: 14
-        }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>
                 1. Download Sample CSV Template
               </div>
-
-              <div style={{
-            fontSize: 12,
-            color: 'var(--text-muted)'
-        }}>
-                Use our pre-formatted CSV
-                template to organize your
-                staff records.
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Pre-formatted template with headers for staff registration.
               </div>
             </div>
-
-            <button className="btn btn-secondary btn-sm" onClick={downloadSampleCSV}>
-              <MdDownload />
-              {' '}Download Template
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={downloadSampleCSV}
+            >
+              <MdDownload /> Download Template
             </button>
           </div>
-          {/* Step 2 */}
+
           <div>
-            <div style={{
-            fontWeight: 700,
-            fontSize: 14,
-            marginBottom: 8
-        }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
               2. Upload Filled CSV File
             </div>
-
-            <input type="file" ref={fileInputRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleFileUpload}/>
-
-            <div onClick={() => {
-            if (!importing) {
-                fileInputRef.current?.click();
-            }
-        }} style={{
-            position: 'relative',
-            zIndex: 10,
-            border: importError
-                ? '2px solid #ef4444'
-                : '2px dashed #cbd5e1',
-            borderRadius: 10,
-            padding: '24px 16px',
-            textAlign: 'center',
-            cursor: importing
-                ? 'not-allowed'
-                : 'pointer',
-            background: importError
-                ? '#fff7f7'
-                : '#fafafa',
-            transition: 'all 0.2s',
-            overflow: 'visible',
-            boxShadow: importError
-                ? '0 0 0 3px rgba(239,68,68,0.08)'
-                : 'none'
-        }}>
-              <MdFilePresent size={32} color={importError ? '#ef4444' : '#64748b'} style={{
-            margin: '0 auto 8px auto',
-            display: 'block'
-        }}/>
-
-              <div style={{
-            fontWeight: 600,
-            fontSize: 14,
-            color: importError
-                ? '#991b1b'
-                : 'inherit'
-        }}>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".csv"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: '2px dashed #cbd5e1',
+                borderRadius: 8,
+                padding: '24px 16px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: '#fafafa',
+                transition: 'all 0.2s'
+              }}
+            >
+              <MdFilePresent
+                size={32}
+                color="#64748b"
+                style={{ margin: '0 auto 8px auto', display: 'block' }}
+              />
+              <div style={{ fontWeight: 600, fontSize: 14 }}>
                 {importFileName
-            ? `Selected: ${importFileName}`
-            : 'Click to select .CSV file from your computer'}
+                  ? `Selected: ${importFileName}`
+                  : 'Click to select .CSV file from your computer'}
               </div>
-
-              <div style={{
-            fontSize: 12,
-            color: importError
-                ? '#b91c1c'
-                : 'var(--text-muted)',
-            marginTop: 4
-        }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-muted)',
+                  marginTop: 4
+                }}
+              >
                 Only CSV format is supported
               </div>
-
-              {/* ERROR INSIDE UPLOAD CARD */}
-              {importError && (<div role="alert" aria-live="assertive" onClick={e => e.stopPropagation()} style={{
-                position: 'relative',
-                zIndex: 999,
-                marginTop: 14,
-                background: '#fef2f2',
-                border: '1px solid #ef4444',
-                borderRadius: 8,
-                padding: '11px 12px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 8,
-                textAlign: 'left',
-                color: '#991b1b',
-                fontSize: 13,
-                lineHeight: 1.45,
-                boxShadow: '0 3px 10px rgba(127,29,29,0.12)'
-            }}>
-                  <MdWarning size={19} style={{
-                flexShrink: 0,
-                marginTop: 1
-            }}/>
-
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                fontWeight: 700,
-                marginBottom: 3
-            }}>
-                      CSV Import Error
-                    </div>
-
-                    <div>
-                      {importError}
-                    </div>
-                  </div>
-
-                  <button type="button" onClick={e => {
-                e.stopPropagation();
-                setImportError('');
-            }} style={{
-                border: 'none',
-                background: 'transparent',
-                color: '#991b1b',
-                cursor: 'pointer',
-                fontSize: 18,
-                fontWeight: 700,
-                lineHeight: 1,
-                padding: 0
-            }} title="Close error">
-                    ×
-                  </button>
-                </div>)}
             </div>
-
-            {/* No records warning */}
-            {importFileName &&
-            !importError &&
-            importRows.length === 0 && (<div style={{
-                marginTop: 10,
-                background: '#fffbeb',
-                border: '1px solid #f59e0b',
-                color: '#92400e',
-                borderRadius: 8,
-                padding: '10px 12px',
-                fontSize: 13,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8
-            }}>
-                  <MdWarning size={18}/>
-
-                  <span>
-                    No valid staff records were found
-                    in this CSV file.
-                  </span>
-                </div>)}
           </div>
 
-          {/* Step 3 - New Record Preview */}
-          {importRows.length > 0 && (<div>
-              <div style={{
-                fontWeight: 700,
-                fontSize: 14,
-                marginBottom: 8,
-                display: 'flex',
-                justifyContent: 'space-between'
-            }}>
-                <span>
-                  3. Preview Records (
-                  {importRows.length} new)
-                </span>
-
-                {duplicateRows.length > 0 && (<span style={{
-                    color: '#d97706',
-                    fontSize: 12,
-                    fontWeight: 600
-                }}>
-                    {duplicateRows.length}{' '}
-                    duplicate(s) skipped
-                  </span>)}
+          {importRows.length > 0 && (
+            <div>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: 14,
+                  marginBottom: 8,
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <span>3. Preview Records ({importRows.length} ready)</span>
               </div>
-
-              <div style={{
-                maxHeight: 240,
-                overflowY: 'auto',
-                border: '1px solid #e2e8f0',
-                borderRadius: 8
-            }}>
-                <table style={{
-                fontSize: 12,
-                width: '100%'
-            }}>
+              <div
+                style={{
+                  maxHeight: 240,
+                  overflowY: 'auto',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8
+                }}
+              >
+                <table style={{ fontSize: 12, width: '100%' }}>
                   <thead>
-                    <tr style={{
-                background: '#f1f5f9'
-            }}>
-                      <th style={{
-                padding: '6px 10px'
-            }}>
-                        #
-                      </th>
-
-                      <th style={{
-                padding: '6px 10px'
-            }}>
-                        Staff ID
-                      </th>
-
-                      <th style={{
-                padding: '6px 10px'
-            }}>
-                        Full Name
-                      </th>
-
-                      <th style={{
-                padding: '6px 10px'
-            }}>
-                        Role
-                      </th>
-
-                      <th style={{
-                padding: '6px 10px'
-            }}>
-                        Phone
-                      </th>
-
-                      <th style={{
-                padding: '6px 10px'
-            }}>
-                        Branch
-                      </th>
+                    <tr style={{ background: '#f1f5f9' }}>
+                      <th style={{ padding: '6px 10px' }}>#</th>
+                      <th style={{ padding: '6px 10px' }}>Staff ID</th>
+                      <th style={{ padding: '6px 10px' }}>Full Name</th>
+                      <th style={{ padding: '6px 10px' }}>Role</th>
+                      <th style={{ padding: '6px 10px' }}>Designation</th>
+                      <th style={{ padding: '6px 10px' }}>Branch</th>
+                      <th style={{ padding: '6px 10px' }}>Phone</th>
+                      <th style={{ padding: '6px 10px' }}>Email</th>
                     </tr>
                   </thead>
-
                   <tbody>
-                    {importRows.map((r, i) => (<tr key={i} style={{
-                    borderBottom: '1px solid #f1f5f9'
-                }}>
-                        <td style={{
-                    padding: '6px 10px'
-                }}>
-                          {i + 1}
-                        </td>
-
-                        <td style={{
-                    padding: '6px 10px',
-                    fontFamily: 'monospace',
-                    fontWeight: 600
-                }}>
+                    {importRows.map((r, i) => (
+                      <tr
+                        key={i}
+                        style={{ borderBottom: '1px solid #f1f5f9' }}
+                      >
+                        <td style={{ padding: '6px 10px' }}>{i + 1}</td>
+                        <td
+                          style={{
+                            padding: '6px 10px',
+                            fontFamily: 'monospace',
+                            fontWeight: 600
+                          }}
+                        >
                           {r.staffId || '—'}
                         </td>
-
-                        <td style={{
-                    padding: '6px 10px',
-                    fontWeight: 600
-                }}>
+                        <td
+                          style={{
+                            padding: '6px 10px',
+                            fontWeight: 600
+                          }}
+                        >
                           {r.fullName || '—'}
                         </td>
-
-                        <td style={{
-                    padding: '6px 10px'
-                }}>
-                          {r.roleType}
+                        <td style={{ padding: '6px 10px' }}>
+                          <span className={`badge ${roleBadge(r.roleType)}`}>
+                            {r.roleType || 'teaching'}
+                          </span>
                         </td>
-
-                        <td style={{
-                    padding: '6px 10px'
-                }}>
-                          {r.phone || '—'}
+                        <td style={{ padding: '6px 10px' }}>
+                          {r.designation || '—'}
                         </td>
-
-                        <td style={{
-                    padding: '6px 10px'
-                }}>
+                        <td style={{ padding: '6px 10px' }}>
                           {r.branchName || '—'}
                         </td>
-                      </tr>))}
+                        <td style={{ padding: '6px 10px' }}>
+                          {r.phone || '—'}
+                        </td>
+                        <td style={{ padding: '6px 10px' }}>
+                          {r.email || '—'}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-
-              {/* =====================================================
-                LAST-CHANGE INSERTION POINT
-                
-                This is immediately AFTER the new-record preview
-                table, exactly where you asked for the new content.
-                
-                I have NOT invented the missing content because the
-                actual code/snippet you wanted to add is not visible
-                in the conversation.
-               ===================================================== */}
-
-              {/* where to add this */}
-
-            </div>)}
+            </div>
+          )}
         </div>
       </Modal>
 

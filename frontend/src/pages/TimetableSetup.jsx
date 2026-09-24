@@ -18,7 +18,8 @@ import {
   MdDelete,
   MdFilterList,
   MdAccessTime,
-  MdClass
+  MdClass,
+  MdCheckCircle
 } from 'react-icons/md';
 import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 
@@ -186,8 +187,7 @@ export default function TimetableSetup() {
       setHasTimetableAccess(access);
 
       const modePermission =
-        s.data.settings?.allowed_attendance_mode ||
-        'BOTH';
+        String(s.data.settings?.allowed_attendance_mode || 'BOTH').trim().toUpperCase();
 
       setAllowedMode(modePermission);
 
@@ -480,7 +480,7 @@ export default function TimetableSetup() {
 
         if (
           hasCustom &&
-          allowedMode === 'BOTH'
+          String(allowedMode || '').toUpperCase() === 'BOTH'
         ) {
 
           setAttendanceMode(mode);
@@ -1136,6 +1136,11 @@ export default function TimetableSetup() {
   // MAIN UI
   // =========================================================
 
+  const normAllowed = String(allowedMode || 'BOTH').trim().toUpperCase();
+  const allowMorningEvening = normAllowed === 'BOTH' || normAllowed === 'MORNING_EVENING' || !['MORNING_EVENING', 'PERIOD_WISE'].includes(normAllowed);
+  const allowPeriodWise = normAllowed === 'BOTH' || normAllowed === 'PERIOD_WISE' || !['MORNING_EVENING', 'PERIOD_WISE'].includes(normAllowed);
+  const canSwitchMode = normAllowed === 'BOTH' || !['MORNING_EVENING', 'PERIOD_WISE'].includes(normAllowed);
+
   return (
 
     <Layout
@@ -1255,19 +1260,12 @@ export default function TimetableSetup() {
                 MORNING / EVENING
             ================================================== */}
 
-            {(
-              allowedMode === 'BOTH' ||
-              allowedMode ===
-                'MORNING_EVENING'
-            ) && (
+            {allowMorningEvening && (
 
               <div
                 onClick={() => {
 
-                  if (
-                    allowedMode ===
-                    'BOTH'
-                  ) {
+                  if (canSwitchMode) {
 
                     setAttendanceMode(
                       'MORNING_EVENING'
@@ -1308,8 +1306,7 @@ export default function TimetableSetup() {
                   padding: 20,
 
                   cursor:
-                    allowedMode ===
-                    'BOTH'
+                    canSwitchMode
                       ? 'pointer'
                       : 'default',
 
@@ -1413,19 +1410,12 @@ export default function TimetableSetup() {
                 PERIOD-WISE
             ================================================== */}
 
-            {(
-              allowedMode === 'BOTH' ||
-              allowedMode ===
-                'PERIOD_WISE'
-            ) && (
+            {allowPeriodWise && (
 
               <div
                 onClick={() => {
 
-                  if (
-                    allowedMode ===
-                    'BOTH'
-                  ) {
+                  if (canSwitchMode) {
 
                     setAttendanceMode(
                       'PERIOD_WISE'
@@ -1454,8 +1444,7 @@ export default function TimetableSetup() {
                   padding: 20,
 
                   cursor:
-                    allowedMode ===
-                    'BOTH'
+                    canSwitchMode
                       ? 'pointer'
                       : 'default',
 

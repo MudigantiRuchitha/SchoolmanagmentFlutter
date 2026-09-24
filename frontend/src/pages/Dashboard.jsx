@@ -1,237 +1,1085 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import ClassSectionSelect from '../components/ClassSectionSelect';
-import { getDashboardStats, getDashboardAttendance, getRecentNotices, getBranches, getClasses } from '../api';
-import { MdPeople, MdSchool, MdBusiness, MdPerson, MdAdminPanelSettings, MdCategory, MdEventNote, MdTune, MdAnnouncement } from 'react-icons/md';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { format } from 'date-fns';
-import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
+import {
+  getDashboardStats,
+  getDashboardAttendance,
+  getRecentNotices,
+  getBranches,
+  getClasses
+} from '../api';
 
-const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#6366f1'];
+import {
+  MdPeople,
+  MdSchool,
+  MdBusiness,
+  MdPerson,
+  MdAdminPanelSettings,
+  MdCategory,
+  MdEventNote,
+  MdAnnouncement,
+  MdSearch,
+  MdCalendarToday,
+  MdTrendingUp
+} from 'react-icons/md';
+
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  Legend
+} from 'recharts';
+
+import { format } from 'date-fns';
+
+import {
+  filterBranches,
+  getBranchScope,
+  isDedicatedBranchUser
+} from '../utils/branchScope';
+
+
+const COLORS = ['#10b981', '#ef4444', '#f59e0b'];
+
 
 export default function Dashboard() {
+
   const [stats, setStats] = useState(null);
-  const [attendance, setAttendance] = useState({ records: [], summary: {} });
+
+  const [attendance, setAttendance] = useState({
+    records: [],
+    summary: {}
+  });
+
   const [notices, setNotices] = useState([]);
+
   const [branches, setBranches] = useState([]);
   const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [attType, setAttType] = useState('student');
-  const [selectedBranch, setSelectedBranch] = useState(getBranchScope);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  useEffect(() => { fetchInit(); }, []);
-  useEffect(() => { fetchAttendance(); }, [attType, selectedBranch, selectedClass, selectedDate]);
+  const [loading, setLoading] = useState(true);
+
+  const [attType, setAttType] = useState('student');
+
+  const [selectedBranch, setSelectedBranch] = useState(
+    getBranchScope
+  );
+
+  const [selectedClass, setSelectedClass] = useState('');
+
+  const [selectedDate, setSelectedDate] = useState(
+    format(new Date(), 'yyyy-MM-dd')
+  );
+
+  const [searchTerm, setSearchTerm] = useState('');
+
+
+  /* ---------------- INITIAL DATA ---------------- */
+
+  useEffect(() => {
+    fetchInit();
+  }, []);
+
+
+  /* ---------------- ATTENDANCE ---------------- */
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [
+    attType,
+    selectedBranch,
+    selectedClass,
+    selectedDate
+  ]);
+
 
   const fetchInit = async () => {
+
     try {
-      const [s, b, n] = await Promise.all([getDashboardStats(), getBranches(), getRecentNotices()]);
-      setStats(s.data.stats);
-      setBranches(filterBranches(b.data.branches || []));
-      setNotices(n.data.notices);
-    } catch {}
+
+      const [
+        statsResponse,
+        branchesResponse,
+        noticesResponse
+      ] = await Promise.all([
+        getDashboardStats(),
+        getBranches(),
+        getRecentNotices()
+      ]);
+
+      setStats(statsResponse.data.stats);
+
+      setBranches(
+        filterBranches(
+          branchesResponse.data.branches || []
+        )
+      );
+
+      setNotices(
+        noticesResponse.data.notices || []
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Failed to load dashboard:',
+        error
+      );
+
+    }
+
     setLoading(false);
   };
 
+
   const fetchAttendance = async () => {
+
     try {
-      const params = { type: attType, date: selectedDate };
-      if (selectedBranch) params.branch_id = selectedBranch;
-      if (selectedClass && attType === 'student') params.class_id = selectedClass;
-      const res = await getDashboardAttendance(params);
-      setAttendance(res.data);
-    } catch {}
+
+      const params = {
+        type: attType,
+        date: selectedDate
+      };
+
+      if (selectedBranch) {
+        params.branch_id = selectedBranch;
+      }
+
+      if (
+        selectedClass &&
+        attType === 'student'
+      ) {
+        params.class_id = selectedClass;
+      }
+
+      const response =
+        await getDashboardAttendance(params);
+
+      setAttendance(
+        response.data
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Failed to load attendance:',
+        error
+      );
+
+    }
   };
 
+
+  /* ---------------- CLASSES ---------------- */
+
   useEffect(() => {
+
     if (selectedBranch) {
-      getClasses({ branch_id: selectedBranch }).then(r => setClasses(r.data.classes)).catch(() => {});
+
+      getClasses({
+        branch_id: selectedBranch
+      })
+        .then(response => {
+
+          setClasses(
+            response.data.classes || []
+          );
+
+        })
+        .catch(() => {
+
+          setClasses([]);
+
+        });
+
     } else {
+
       setClasses([]);
+
       setSelectedClass('');
+
     }
+
   }, [selectedBranch]);
 
-  const statCards = stats ? [
-    { label: 'Total Students', value: stats.total_students, icon: <MdSchool />, bg: '#eff6ff', color: '#3b82f6' },
-    { label: 'Teaching Staff', value: stats.teaching_staff, icon: <MdPeople />, bg: '#f0fdf4', color: '#10b981' },
-    { label: 'Non-Teaching', value: stats.non_teaching_staff, icon: <MdPerson />, bg: '#fefce8', color: '#eab308' },
-    { label: 'Management', value: stats.management_staff, icon: <MdAdminPanelSettings />, bg: '#fdf4ff', color: '#a855f7' },
-    { label: 'Total Staff', value: stats.total_staff, icon: <MdPeople />, bg: '#fff7ed', color: '#f97316' },
-    { label: 'Admin Users', value: stats.total_admins, icon: <MdAdminPanelSettings />, bg: '#fef2f2', color: '#ef4444' },
-    { label: 'Classes', value: stats.total_classes, icon: <MdCategory />, bg: '#f0fdfa', color: '#14b8a6' },
-    { label: 'Branches', value: stats.total_branches, icon: <MdBusiness />, bg: '#eff6ff', color: '#6366f1' },
-  ] : [];
 
-  const summary = attendance.summary || {};
+  /* ---------------- STAT CARDS ---------------- */
+
+  const statCards = stats
+    ? [
+
+        {
+          label: 'Total Students',
+          value: stats.total_students,
+          icon: <MdSchool />,
+          className: 'blue'
+        },
+
+        {
+          label: 'Teaching Staff',
+          value: stats.teaching_staff,
+          icon: <MdPeople />,
+          className: 'green'
+        },
+
+        {
+          label: 'Non-Teaching',
+          value: stats.non_teaching_staff,
+          icon: <MdPerson />,
+          className: 'yellow'
+        },
+
+        {
+          label: 'Management',
+          value: stats.management_staff,
+          icon: <MdAdminPanelSettings />,
+          className: 'purple'
+        },
+
+        {
+          label: 'Total Staff',
+          value: stats.total_staff,
+          icon: <MdPeople />,
+          className: 'orange'
+        },
+
+        {
+          label: 'Admin Users',
+          value: stats.total_admins,
+          icon: <MdAdminPanelSettings />,
+          className: 'red'
+        },
+
+        {
+          label: 'Classes',
+          value: stats.total_classes,
+          icon: <MdCategory />,
+          className: 'teal'
+        },
+
+        {
+          label: 'Branches',
+          value: stats.total_branches,
+          icon: <MdBusiness />,
+          className: 'indigo'
+        }
+
+      ]
+    : [];
+
+
+  /* ---------------- ATTENDANCE SUMMARY ---------------- */
+
+  const summary =
+    attendance.summary || {};
+
+
   const pieData = [
-    { name: 'Present', value: summary.present || 0 },
-    { name: 'Absent', value: summary.absent || 0 },
-    { name: 'Late', value: summary.late || 0 },
-  ].filter(d => d.value > 0);
 
-  if (loading) return (
-    <Layout title="Dashboard">
-      <div className="loading-overlay"><div className="spinner" /> Loading dashboard...</div>
-    </Layout>
+    {
+      name: 'Present',
+      value: summary.present || 0
+    },
+
+    {
+      name: 'Absent',
+      value: summary.absent || 0
+    },
+
+    {
+      name: 'Late',
+      value: summary.late || 0
+    }
+
+  ].filter(
+    item => item.value > 0
   );
 
+
+  /* ---------------- SEARCH ---------------- */
+
+  const filteredRecords =
+    (attendance.records || []).filter(record => {
+
+      if (!searchTerm.trim()) {
+        return true;
+      }
+
+      const search =
+        searchTerm.toLowerCase();
+
+      return (
+
+        String(record.full_name || '')
+          .toLowerCase()
+          .includes(search)
+
+        ||
+
+        String(
+          record.admission_no ||
+          record.staff_id ||
+          ''
+        )
+          .toLowerCase()
+          .includes(search)
+
+        ||
+
+        String(
+          record.class_name ||
+          record.role_type ||
+          ''
+        )
+          .toLowerCase()
+          .includes(search)
+
+        ||
+
+        String(
+          record.branch_name || ''
+        )
+          .toLowerCase()
+          .includes(search)
+
+      );
+
+    });
+
+
+  /* ---------------- LOADING ---------------- */
+
+  if (loading) {
+
+    return (
+
+      <Layout title="Dashboard">
+
+        <div className="loading-overlay">
+
+          <div className="spinner" />
+
+          Loading dashboard...
+
+        </div>
+
+      </Layout>
+
+    );
+
+  }
+
+
+  /* ---------------- UI ---------------- */
+
   return (
-    <Layout title="Dashboard" subtitle={`Today: ${format(new Date(), 'EEEE, MMMM d yyyy')}`}>
-      {/* Stats */}
-      <div className="stats-grid">
-        {statCards.map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-icon" style={{ background: s.bg }}>
-              <span style={{ fontSize: 22 }}>{s.icon}</span>
-            </div>
-            <div className="stat-info">
-              <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
-              <div className="stat-label">{s.label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
-        {/* Attendance Panel */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title"><MdEventNote /> Today's Attendance</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="date"
-                className="input"
-                style={{ width: 160, padding: '6px 10px', fontSize: 13 }}
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-              />
-            </div>
-          </div>
+    <Layout
+      title="Dashboard"
+      subtitle={`Today: ${format(
+        new Date(),
+        'EEEE, MMMM d yyyy'
+      )}`}
+    >
 
-          {/* Filters & Tabs */}
-          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div className="tabs" style={{ marginBottom: 0 }}>
-              <button className={`tab-btn ${attType === 'student' ? 'active' : ''}`} onClick={() => setAttType('student')}>Students</button>
-              <button className={`tab-btn ${attType === 'staff' ? 'active' : ''}`} onClick={() => setAttType('staff')}>Staff</button>
-            </div>
-            <select className="input" style={{ width: 160, padding: '8px 10px', fontSize: 13 }} value={selectedBranch} onChange={(e) => { setSelectedBranch(e.target.value); setSelectedClass(''); }}>
-              {!isDedicatedBranchUser() && <option value="">All Branches</option>}
-              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-            {attType === 'student' && selectedBranch && classes.length > 0 && (
-              <ClassSectionSelect
-                classes={classes}
-                value={selectedClass}
-                onChange={setSelectedClass}
-                includeAll
-                classStyle={{ width: 160, padding: '8px 10px', fontSize: 13 }}
-                sectionStyle={{ width: 140, padding: '8px 10px', fontSize: 13 }}
-              />
-            )}
-          </div>
+      <div className="dashboard-page">
 
-          {/* Summary */}
-          <div style={{ display: 'flex', gap: 16, padding: '16px 24px', background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
-            {[
-              { label: 'Total', value: summary.total || 0, color: 'var(--primary)' },
-              { label: 'Present', value: summary.present || 0, color: 'var(--success)' },
-              { label: 'Absent', value: summary.absent || 0, color: 'var(--danger)' },
-              { label: 'Late', value: summary.late || 0, color: 'var(--warning)' },
-            ].map(s => (
-              <div key={s.label} style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{s.label}</div>
+
+        {/* =====================================================
+            STATISTICS
+        ===================================================== */}
+
+        <div className="stats-grid dashboard-stats-grid">
+
+          {statCards.map(card => (
+
+            <div
+              key={card.label}
+              className={`stat-card dashboard-stat-card ${card.className}`}
+            >
+
+              <div className="stat-icon">
+
+                {card.icon}
+
               </div>
-            ))}
-          </div>
 
-          {/* Records table */}
-          <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>{attType === 'student' ? 'Class' : 'Role'}</th>
-                  <th>Branch</th>
-                  <th>Punch Time</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.records?.length === 0 ? (
-                  <tr><td colSpan={5}><div className="empty-state" style={{ padding: 30 }}><div>No records found</div></div></td></tr>
-                ) : attendance.records?.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{r.full_name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {attType === 'student' ? r.admission_no : r.staff_id}
-                      </div>
-                    </td>
-                    <td style={{ fontSize: 13 }}>{attType === 'student' ? `${r.class_name} ${r.section || ''}` : r.role_type}</td>
-                    <td style={{ fontSize: 13 }}>{r.branch_name}</td>
-                    <td style={{ fontSize: 13 }}>{r.check_in || r.check_out || '—'}</td>
-                    <td>
-                      <span className={`badge ${!r.status || r.status === 'absent' ? 'badge-danger' : r.status === 'present' ? 'badge-success' : r.status === 'late' ? 'badge-warning' : 'badge-info'}`}>
-                        {r.status || 'absent'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              <div className="stat-info">
 
-        {/* Right Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Pie Chart */}
-          {pieData.length > 0 && (
-            <div className="card">
-              <div className="card-header" style={{ padding: '16px 20px' }}>
-                <div className="card-title" style={{ fontSize: 14 }}>Attendance Summary</div>
-              </div>
-              <div style={{ padding: '12px 0' }}>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
-                      {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
+                <div className="stat-value">
 
-          {/* Notices */}
-          <div className="card" style={{ flex: 1 }}>
-            <div className="card-header" style={{ padding: '16px 20px' }}>
-              <div className="card-title" style={{ fontSize: 14 }}><MdAnnouncement /> Recent Notices</div>
-            </div>
-            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {notices.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '20px 0' }}>No notices</div>
-              ) : notices.map((n) => (
-                <div key={n.id} className="notice-card">
-                  <div className="notice-title">{n.title}</div>
-                  <div className="notice-content" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {n.content}
-                  </div>
-                  <div className="notice-meta">
-                    <span className={`badge badge-${n.audience === 'all' ? 'purple' : n.audience === 'staff' ? 'info' : 'success'}`} style={{ fontSize: 10 }}>
-                      {n.audience}
-                    </span>
-                  </div>
+                  {card.value ?? 0}
+
                 </div>
-              ))}
+
+                <div className="stat-label">
+
+                  {card.label}
+
+                </div>
+
+              </div>
+
             </div>
-          </div>
+
+          ))}
+
         </div>
+
+
+
+        {/* =====================================================
+            MAIN DASHBOARD GRID
+        ===================================================== */}
+
+        <div className="dashboard-main-grid">
+
+
+          {/* =================================================
+              LEFT SIDE
+          ================================================= */}
+
+          <div className="dashboard-attendance-card card">
+
+
+            {/* HEADER */}
+
+            <div className="dashboard-attendance-header">
+
+              <div>
+
+                <div className="dashboard-attendance-title">
+
+                  <div className="dashboard-title-icon">
+
+                    <MdEventNote />
+
+                  </div>
+
+                  <div>
+
+                    <h2>
+                      Today's Attendance
+                    </h2>
+
+                    <p>
+                      Attendance overview for selected date
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div className="dashboard-attendance-date">
+
+                <MdCalendarToday />
+
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e =>
+                    setSelectedDate(
+                      e.target.value
+                    )
+                  }
+                />
+
+              </div>
+
+            </div>
+
+
+
+            {/* FILTERS */}
+
+            <div className="dashboard-attendance-filters">
+
+
+              {/* Student / Staff */}
+
+              <div className="dashboard-tabs">
+
+                <button
+                  className={
+                    attType === 'student'
+                      ? 'active'
+                      : ''
+                  }
+                  onClick={() =>
+                    setAttType('student')
+                  }
+                >
+                  Students
+                </button>
+
+                <button
+                  className={
+                    attType === 'staff'
+                      ? 'active'
+                      : ''
+                  }
+                  onClick={() =>
+                    setAttType('staff')
+                  }
+                >
+                  Staff
+                </button>
+
+              </div>
+
+
+
+              {/* Branch */}
+
+              <select
+                className="dashboard-filter-select"
+                value={selectedBranch}
+                onChange={e => {
+
+                  setSelectedBranch(
+                    e.target.value
+                  );
+
+                  setSelectedClass('');
+
+                }}
+              >
+
+                {!isDedicatedBranchUser() && (
+
+                  <option value="">
+                    All Branches
+                  </option>
+
+                )}
+
+                {branches.map(branch => (
+
+                  <option
+                    key={branch.id}
+                    value={branch.id}
+                  >
+                    {branch.name}
+                  </option>
+
+                ))}
+
+              </select>
+
+
+
+              {/* Class */}
+
+              {attType === 'student' &&
+                selectedBranch &&
+                classes.length > 0 && (
+
+                  <ClassSectionSelect
+                    classes={classes}
+                    value={selectedClass}
+                    onChange={setSelectedClass}
+                    includeAll
+                    classStyle={{
+                      width: 160,
+                      padding: '8px 10px',
+                      fontSize: 13
+                    }}
+                    sectionStyle={{
+                      width: 140,
+                      padding: '8px 10px',
+                      fontSize: 13
+                    }}
+                  />
+
+                )}
+
+
+
+              {/* Search */}
+
+              <div className="dashboard-search">
+
+                <MdSearch />
+
+                <input
+                  type="text"
+                  placeholder="Search attendance..."
+                  value={searchTerm}
+                  onChange={e =>
+                    setSearchTerm(
+                      e.target.value
+                    )
+                  }
+                />
+
+              </div>
+
+            </div>
+
+
+
+            {/* SUMMARY */}
+
+            <div className="dashboard-attendance-summary">
+
+
+              <div className="dashboard-summary-item total">
+
+                <span className="summary-number">
+                  {summary.total || 0}
+                </span>
+
+                <span className="summary-label">
+                  Total
+                </span>
+
+              </div>
+
+
+              <div className="dashboard-summary-item present">
+
+                <span className="summary-number">
+                  {summary.present || 0}
+                </span>
+
+                <span className="summary-label">
+                  Present
+                </span>
+
+              </div>
+
+
+              <div className="dashboard-summary-item absent">
+
+                <span className="summary-number">
+                  {summary.absent || 0}
+                </span>
+
+                <span className="summary-label">
+                  Absent
+                </span>
+
+              </div>
+
+
+              <div className="dashboard-summary-item late">
+
+                <span className="summary-number">
+                  {summary.late || 0}
+                </span>
+
+                <span className="summary-label">
+                  Late
+                </span>
+
+              </div>
+
+            </div>
+
+
+
+            {/* TABLE */}
+
+            <div className="dashboard-table-container">
+
+              <table>
+
+                <thead>
+
+                  <tr>
+
+                    <th>Name</th>
+
+                    <th>
+                      {attType === 'student'
+                        ? 'Class'
+                        : 'Role'}
+                    </th>
+
+                    <th>
+                      Branch
+                    </th>
+
+                    <th>
+                      Punch Time
+                    </th>
+
+                    <th>
+                      Status
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                  {filteredRecords.length === 0 ? (
+
+                    <tr>
+
+                      <td colSpan={5}>
+
+                        <div className="empty-state dashboard-empty-state">
+
+                          <div>
+                            No attendance records found
+                          </div>
+
+                        </div>
+
+                      </td>
+
+                    </tr>
+
+                  ) : (
+
+                    filteredRecords.map(record => (
+
+                      <tr key={record.id}>
+
+                        <td>
+
+                          <div className="dashboard-person">
+
+                            <div className="dashboard-person-avatar">
+
+                              {record.full_name
+                                ?.charAt(0)
+                                ?.toUpperCase() || '?'
+                              }
+
+                            </div>
+
+                            <div>
+
+                              <div className="dashboard-person-name">
+
+                                {record.full_name}
+
+                              </div>
+
+                              <div className="dashboard-person-id">
+
+                                {attType === 'student'
+                                  ? record.admission_no
+                                  : record.staff_id
+                                }
+
+                              </div>
+
+                            </div>
+
+                          </div>
+
+                        </td>
+
+
+                        <td>
+
+                          {attType === 'student'
+                            ? `${record.class_name || ''} ${record.section || ''}`
+                            : record.role_type || '—'
+                          }
+
+                        </td>
+
+
+                        <td>
+
+                          {record.branch_name || '—'}
+
+                        </td>
+
+
+                        <td>
+
+                          {record.check_in ||
+                            record.check_out ||
+                            '—'
+                          }
+
+                        </td>
+
+
+                        <td>
+
+                          <span
+                            className={
+                              `dashboard-status ${
+                                !record.status ||
+                                record.status === 'absent'
+                                  ? 'absent'
+                                  : record.status === 'present'
+                                    ? 'present'
+                                    : record.status === 'late'
+                                      ? 'late'
+                                      : 'other'
+                              }`
+                            }
+                          >
+
+                            {record.status ||
+                              'Absent'}
+
+                          </span>
+
+                        </td>
+
+                      </tr>
+
+                    ))
+
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </div>
+
+
+
+          {/* =================================================
+              RIGHT SIDE
+          ================================================= */}
+
+          <div className="dashboard-right-column">
+
+
+            {/* ATTENDANCE SUMMARY */}
+
+            <div className="dashboard-side-card card">
+
+              <div className="dashboard-side-header">
+
+                <div>
+
+                  <h3>
+                    Attendance Summary
+                  </h3>
+
+                  <p>
+                    Daily attendance breakdown
+                  </p>
+
+                </div>
+
+                <div className="dashboard-side-icon">
+
+                  <MdTrendingUp />
+
+                </div>
+
+              </div>
+
+
+              {pieData.length > 0 ? (
+
+                <>
+
+                  <div className="dashboard-chart">
+
+                    <ResponsiveContainer
+                      width="100%"
+                      height={220}
+                    >
+
+                      <PieChart>
+
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={82}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+
+                          {pieData.map(
+                            (_, index) => (
+
+                              <Cell
+                                key={index}
+                                fill={
+                                  COLORS[index]
+                                }
+                              />
+
+                            )
+                          )}
+
+                        </Pie>
+
+                        <Tooltip />
+
+                      </PieChart>
+
+                    </ResponsiveContainer>
+
+                  </div>
+
+
+                  <div className="dashboard-chart-legend">
+
+                    {pieData.map(
+                      (item, index) => (
+
+                        <div
+                          key={item.name}
+                          className="dashboard-legend-item"
+                        >
+
+                          <span
+                            className="dashboard-legend-dot"
+                            style={{
+                              background:
+                                COLORS[index]
+                            }}
+                          />
+
+                          <span>
+                            {item.name}
+                          </span>
+
+                          <strong>
+                            {item.value}
+                          </strong>
+
+                        </div>
+
+                      )
+                    )}
+
+                  </div>
+
+                </>
+
+              ) : (
+
+                <div className="dashboard-no-chart">
+
+                  No attendance data available.
+
+                </div>
+
+              )}
+
+            </div>
+
+
+
+            {/* RECENT NOTICES */}
+
+            <div className="dashboard-side-card dashboard-notices-card card">
+
+              <div className="dashboard-side-header">
+
+                <div>
+
+                  <h3>
+                    Recent Notices
+                  </h3>
+
+                  <p>
+                    Latest announcements
+                  </p>
+
+                </div>
+
+                <div className="dashboard-side-icon purple">
+
+                  <MdAnnouncement />
+
+                </div>
+
+              </div>
+
+
+              <div className="dashboard-notices">
+
+                {notices.length === 0 ? (
+
+                  <div className="dashboard-no-notices">
+
+                    No notices available.
+
+                  </div>
+
+                ) : (
+
+                  notices.map(notice => (
+
+                    <div
+                      key={notice.id}
+                      className="dashboard-notice"
+                    >
+
+                      <div className="dashboard-notice-icon">
+
+                        <MdAnnouncement />
+
+                      </div>
+
+                      <div className="dashboard-notice-content">
+
+                        <div className="dashboard-notice-title">
+
+                          {notice.title}
+
+                        </div>
+
+                        <div className="dashboard-notice-text">
+
+                          {notice.content}
+
+                        </div>
+
+                        <div className="dashboard-notice-meta">
+
+                          <span
+                            className={`dashboard-audience ${
+                              notice.audience === 'all'
+                                ? 'purple'
+                                : notice.audience === 'staff'
+                                  ? 'blue'
+                                  : 'green'
+                            }`}
+                          >
+
+                            {notice.audience}
+
+                          </span>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  ))
+
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
+
     </Layout>
+
   );
 }
