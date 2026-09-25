@@ -320,38 +320,39 @@ export default function AcademicData() {
       subtitle="Mark, update, and manage academic student daily rosters and staff records"
       headerRight={
         hasSearched && filteredResults.length > 0 && (
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
               type="button"
               onClick={handleExportCSV}
               title="Export CSV"
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/80 transition-colors shadow-none cursor-pointer"
+              className="btn btn-secondary btn-sm"
             >
-              <MdDownload className="text-base" /> Export CSV
+              <MdDownload /> Export CSV
             </button>
           </div>
         )
       }
     >
       {toast && (
-        <div className="mb-4 flex items-center gap-2 p-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
-          <MdCheckCircle className="text-lg text-emerald-600 flex-shrink-0" />
+        <div className="alert alert-success" style={{ marginBottom: 16 }}>
+          <MdCheckCircle style={{ fontSize: 18, flexShrink: 0 }} />
           <span>{toast}</span>
         </div>
       )}
 
       {/* ── Filters & Control Bar Card (All controls unified in one line) ── */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 md:p-6 mb-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 font-semibold text-sm text-slate-700 mr-1">
-            <MdFilterList className="text-lg text-slate-600" /> Filters:
+      <div className="card" style={{ padding: '20px 24px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: 'var(--text-secondary)', marginRight: 4 }}>
+            <MdFilterList style={{ fontSize: 18 }} /> Filters:
           </div>
 
           {/* 1. Entity Select */}
           <select
             value={entityType}
             onChange={(e) => handleEntityChange(e.target.value)}
-            className="filter-dropdown min-w-[140px]"
+            className="filter-dropdown"
+            style={{ minWidth: 140 }}
           >
             <option value="student">Students</option>
             <option value="staff">Staff Members</option>
@@ -361,7 +362,8 @@ export default function AcademicData() {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
-            className="filter-dropdown min-w-[150px]"
+            className="filter-dropdown"
+            style={{ minWidth: 150 }}
           >
             <option value="">
               {academicYears.length === 0 ? 'No Academic Years' : 'All Academic Years'}
@@ -380,7 +382,8 @@ export default function AcademicData() {
                 value={selectedClass}
                 onChange={(e) => handleClassChange(e.target.value)}
                 disabled={loadingDropdowns}
-                className="filter-dropdown min-w-[130px]"
+                className="filter-dropdown"
+                style={{ minWidth: 130 }}
               >
                 <option value="">
                   {loadingDropdowns ? 'Loading...' : 'All Classes'}
@@ -396,7 +399,8 @@ export default function AcademicData() {
                 value={selectedSection}
                 onChange={(e) => setSelectedSection(e.target.value)}
                 disabled={!selectedClass}
-                className="filter-dropdown min-w-[130px]"
+                className="filter-dropdown"
+                style={{ minWidth: 130 }}
               >
                 <option value="">All Sections</option>
                 {availableSections.map((sec) => (
@@ -413,7 +417,8 @@ export default function AcademicData() {
             <select
               value={staffType}
               onChange={(e) => setStaffType(e.target.value)}
-              className="filter-dropdown min-w-[150px]"
+              className="filter-dropdown"
+              style={{ minWidth: 150 }}
             >
               <option value="teaching">Teaching Staff</option>
               <option value="non-teaching">Non-Teaching Staff</option>
@@ -424,7 +429,8 @@ export default function AcademicData() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="filter-dropdown min-w-[130px]"
+            className="filter-dropdown"
+            style={{ minWidth: 130 }}
           >
             <option value="">All Statuses</option>
             <option value="active">Active</option>
@@ -436,7 +442,8 @@ export default function AcademicData() {
             <select
               value={genderFilter}
               onChange={(e) => setGenderFilter(e.target.value)}
-              className="filter-dropdown min-w-[130px]"
+              className="filter-dropdown"
+              style={{ minWidth: 130 }}
             >
               <option value="">All Genders</option>
               <option value="male">Male</option>
@@ -444,7 +451,7 @@ export default function AcademicData() {
             </select>
           )}
 
-          {/* Search Box as in reference image */}
+          {/* Search Box */}
           <div
             className="search-box"
             style={{
@@ -479,7 +486,8 @@ export default function AcademicData() {
             <button
               type="button"
               onClick={handleReset}
-              className="text-xs text-slate-500 hover:text-slate-800 font-medium px-2.5 h-[40px] rounded-xl hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+              className="btn btn-secondary btn-sm"
+              style={{ height: 40, borderRadius: 12 }}
               title="Reset filters"
             >
               <MdRefresh /> Reset
@@ -487,34 +495,34 @@ export default function AcademicData() {
           )}
         </div>
 
-        {/* Row 3: Live Summary Counters (Styled like Student Attendance dots) */}
-        <div className="flex flex-wrap items-center gap-6 mt-4 pt-1 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#4f46e5] inline-block"></span>
-            <span className="font-bold text-[#4f46e5]">{summary.total}</span>
-            <span className="text-slate-500 font-medium">Total</span>
+        {/* Row 3: Live Summary Counters */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 24, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block' }}></span>
+            <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{summary.total}</span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Total</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-            <span className="font-bold text-emerald-600">{summary.active}</span>
-            <span className="text-slate-500 font-medium">Active</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }}></span>
+            <span style={{ fontWeight: 700, color: 'var(--success)' }}>{summary.active}</span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Active</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-            <span className="font-bold text-rose-600">{summary.inactive}</span>
-            <span className="text-slate-500 font-medium">Inactive</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }}></span>
+            <span style={{ fontWeight: 700, color: 'var(--danger)' }}>{summary.inactive}</span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Inactive</span>
           </div>
           {summary.hasGender && (
             <>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                <span className="font-bold text-amber-600">{summary.male}</span>
-                <span className="text-slate-500 font-medium">Male</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }}></span>
+                <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{summary.male}</span>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Male</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
-                <span className="font-bold text-purple-600">{summary.female}</span>
-                <span className="text-slate-500 font-medium">Female</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }}></span>
+                <span style={{ fontWeight: 700, color: '#8b5cf6' }}>{summary.female}</span>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Female</span>
               </div>
             </>
           )}
@@ -522,23 +530,25 @@ export default function AcademicData() {
       </div>
 
       {errorMsg && (
-        <div className="mb-6 p-4 rounded-xl border border-rose-200 bg-rose-50 text-sm text-rose-700">
+        <div className="alert alert-error" style={{ marginBottom: 20 }}>
           {errorMsg}
         </div>
       )}
 
-      {/* ── Results Table Card (Styled like Period Card in Attendance) ── */}
+      {/* ── Results Table Card ── */}
       {searching ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
-          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm font-medium">Querying academic records from database...</span>
+        <div className="card" style={{ padding: 48, textAlign: 'center', marginBottom: 24 }}>
+          <div className="loading-overlay" style={{ minHeight: 180 }}>
+            <div className="spinner" />
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>Querying academic records from database...</span>
+          </div>
         </div>
       ) : hasSearched ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden mb-6">
+        <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
           {/* Card Header with count badges */}
-          <div className="p-5 md:px-6 md:py-4 border-b border-slate-100 flex flex-col gap-1.5">
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-1">
-              <span className="font-bold text-base md:text-lg text-slate-900">
+          <div className="card-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
                 {searchedEntity === 'student'
                   ? selectedClass
                     ? `Class: ${selectedClass} ${selectedSection ? `Section ${selectedSection}` : ''}`
@@ -547,70 +557,66 @@ export default function AcademicData() {
                   ? 'Teaching Staff Directory'
                   : 'Non-Teaching Staff Directory'}
               </span>
-              <span className="text-xs md:text-sm text-slate-500 font-normal">
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 400 }}>
                 Academic Year: {selectedYear}
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-slate-400 font-medium mr-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginRight: 4 }}>
                 {filteredResults.length} {searchedEntity === 'student' ? 'Students' : 'Staff Members'}
               </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100/60">
+              <span className="badge badge-success">
                 {summary.active} Active
               </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-600 border border-rose-100/60">
+              <span className="badge badge-danger">
                 {summary.inactive} Inactive
               </span>
             </div>
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
             {searchedEntity === 'student' ? (
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50/60 border-t border-b border-slate-100">
+              <table>
+                <thead>
                   <tr>
-                    <th className="py-3 px-4 pl-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">STUDENT NAME</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">ADMISSION NO</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">CLASS & SEC</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">GENDER</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">PARENT / GUARDIAN</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">CONTACT</th>
-                    <th className="py-3 px-4 pr-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider">STATUS</th>
+                    <th style={{ width: 48, paddingLeft: 20 }}>#</th>
+                    <th>STUDENT NAME</th>
+                    <th>ADMISSION NO</th>
+                    <th>CLASS & SEC</th>
+                    <th>GENDER</th>
+                    <th>PARENT / GUARDIAN</th>
+                    <th>CONTACT</th>
+                    <th style={{ paddingRight: 20 }}>STATUS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredResults.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
-                        <MdSchool size={36} className="mx-auto mb-2 opacity-40 text-slate-400" />
-                        <p className="font-semibold text-slate-600 text-sm">No students found</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Try adjusting your filters or search term.</p>
+                      <td colSpan={8}>
+                        <div className="empty-state">
+                          <MdSchool className="empty-state-icon" />
+                          <div className="empty-state-title">No students found</div>
+                          <div className="empty-state-text">Try adjusting your filters or search term.</div>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     filteredResults.map((s, idx) => {
                       const isActive = s.status === true || s.status === 'active' || s.status === 1;
                       return (
-                        <tr key={s.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3.5 px-4 pl-6 text-sm text-slate-700">{idx + 1}</td>
-                          <td className="py-3.5 px-4 text-sm font-medium text-slate-800">{s.student_name}</td>
-                          <td className="py-3.5 px-4 text-sm font-bold text-slate-900">{s.admission_no || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-600">
+                        <tr key={s.id || idx}>
+                          <td style={{ paddingLeft: 20, color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                          <td style={{ fontWeight: 600 }}>{s.student_name}</td>
+                          <td style={{ fontWeight: 700 }}>{s.admission_no || '—'}</td>
+                          <td>
                             {s.class_name} {s.section ? `• ${s.section}` : ''}
                           </td>
-                          <td className="py-3.5 px-4 text-sm text-slate-600 capitalize">{s.gender || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-500">{s.parent_guardian || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-500 font-mono">{s.contact || '—'}</td>
-                          <td className="py-3.5 px-4 pr-6">
-                            <span
-                              className={`inline-flex items-center justify-center px-4 py-1 rounded-full text-xs font-semibold ${
-                                isActive
-                                  ? 'bg-emerald-50 text-emerald-600'
-                                  : 'bg-rose-100/80 text-rose-600'
-                              }`}
-                            >
+                          <td style={{ textTransform: 'capitalize' }}>{s.gender || '—'}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{s.parent_guardian || '—'}</td>
+                          <td style={{ fontFamily: 'monospace' }}>{s.contact || '—'}</td>
+                          <td style={{ paddingRight: 20 }}>
+                            <span className={`badge ${isActive ? 'badge-success' : 'badge-danger'}`}>
                               {isActive ? 'active' : 'inactive'}
                             </span>
                           </td>
@@ -621,48 +627,44 @@ export default function AcademicData() {
                 </tbody>
               </table>
             ) : searchedStaffType === 'teaching' ? (
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50/60 border-t border-b border-slate-100">
+              <table>
+                <thead>
                   <tr>
-                    <th className="py-3 px-4 pl-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">STAFF NAME</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">EMPLOYEE ID</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">SUBJECT</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">DEPARTMENT</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">DESIGNATION</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">CONTACT</th>
-                    <th className="py-3 px-4 pr-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider">STATUS</th>
+                    <th style={{ width: 48, paddingLeft: 20 }}>#</th>
+                    <th>STAFF NAME</th>
+                    <th>EMPLOYEE ID</th>
+                    <th>SUBJECT</th>
+                    <th>DEPARTMENT</th>
+                    <th>DESIGNATION</th>
+                    <th>CONTACT</th>
+                    <th style={{ paddingRight: 20 }}>STATUS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredResults.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
-                        <MdPeople size={36} className="mx-auto mb-2 opacity-40 text-slate-400" />
-                        <p className="font-semibold text-slate-600 text-sm">No teaching staff found</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Try adjusting your filters or search term.</p>
+                      <td colSpan={8}>
+                        <div className="empty-state">
+                          <MdPeople className="empty-state-icon" />
+                          <div className="empty-state-title">No teaching staff found</div>
+                          <div className="empty-state-text">Try adjusting your filters or search term.</div>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     filteredResults.map((st, idx) => {
                       const isActive = st.status === true || st.status === 'active' || st.status === 1;
                       return (
-                        <tr key={st.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3.5 px-4 pl-6 text-sm text-slate-700">{idx + 1}</td>
-                          <td className="py-3.5 px-4 text-sm font-medium text-slate-800">{st.name}</td>
-                          <td className="py-3.5 px-4 text-sm font-bold text-slate-900">{st.employee_id || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-600">{st.subject || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-600">{st.department || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-500">{st.designation || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-500 font-mono">{st.contact || '—'}</td>
-                          <td className="py-3.5 px-4 pr-6">
-                            <span
-                              className={`inline-flex items-center justify-center px-4 py-1 rounded-full text-xs font-semibold ${
-                                isActive
-                                  ? 'bg-emerald-50 text-emerald-600'
-                                  : 'bg-rose-100/80 text-rose-600'
-                              }`}
-                            >
+                        <tr key={st.id || idx}>
+                          <td style={{ paddingLeft: 20, color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                          <td style={{ fontWeight: 600 }}>{st.name}</td>
+                          <td style={{ fontWeight: 700 }}>{st.employee_id || '—'}</td>
+                          <td>{st.subject || '—'}</td>
+                          <td>{st.department || '—'}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{st.designation || '—'}</td>
+                          <td style={{ fontFamily: 'monospace' }}>{st.contact || '—'}</td>
+                          <td style={{ paddingRight: 20 }}>
+                            <span className={`badge ${isActive ? 'badge-success' : 'badge-danger'}`}>
                               {isActive ? 'active' : 'inactive'}
                             </span>
                           </td>
@@ -673,46 +675,42 @@ export default function AcademicData() {
                 </tbody>
               </table>
             ) : (
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50/60 border-t border-b border-slate-100">
+              <table>
+                <thead>
                   <tr>
-                    <th className="py-3 px-4 pl-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">STAFF NAME</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">EMPLOYEE ID</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">DEPARTMENT</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">DESIGNATION</th>
-                    <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">CONTACT</th>
-                    <th className="py-3 px-4 pr-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider">STATUS</th>
+                    <th style={{ width: 48, paddingLeft: 20 }}>#</th>
+                    <th>STAFF NAME</th>
+                    <th>EMPLOYEE ID</th>
+                    <th>DEPARTMENT</th>
+                    <th>DESIGNATION</th>
+                    <th>CONTACT</th>
+                    <th style={{ paddingRight: 20 }}>STATUS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredResults.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
-                        <MdPeople size={36} className="mx-auto mb-2 opacity-40 text-slate-400" />
-                        <p className="font-semibold text-slate-600 text-sm">No non-teaching staff found</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Try adjusting your filters or search term.</p>
+                      <td colSpan={7}>
+                        <div className="empty-state">
+                          <MdPeople className="empty-state-icon" />
+                          <div className="empty-state-title">No non-teaching staff found</div>
+                          <div className="empty-state-text">Try adjusting your filters or search term.</div>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     filteredResults.map((st, idx) => {
                       const isActive = st.status === true || st.status === 'active' || st.status === 1;
                       return (
-                        <tr key={st.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3.5 px-4 pl-6 text-sm text-slate-700">{idx + 1}</td>
-                          <td className="py-3.5 px-4 text-sm font-medium text-slate-800">{st.name}</td>
-                          <td className="py-3.5 px-4 text-sm font-bold text-slate-900">{st.employee_id || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-600">{st.department || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-500">{st.designation || '—'}</td>
-                          <td className="py-3.5 px-4 text-sm text-slate-500 font-mono">{st.contact || '—'}</td>
-                          <td className="py-3.5 px-4 pr-6">
-                            <span
-                              className={`inline-flex items-center justify-center px-4 py-1 rounded-full text-xs font-semibold ${
-                                isActive
-                                  ? 'bg-emerald-50 text-emerald-600'
-                                  : 'bg-rose-100/80 text-rose-600'
-                              }`}
-                            >
+                        <tr key={st.id || idx}>
+                          <td style={{ paddingLeft: 20, color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                          <td style={{ fontWeight: 600 }}>{st.name}</td>
+                          <td style={{ fontWeight: 700 }}>{st.employee_id || '—'}</td>
+                          <td>{st.department || '—'}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{st.designation || '—'}</td>
+                          <td style={{ fontFamily: 'monospace' }}>{st.contact || '—'}</td>
+                          <td style={{ paddingRight: 20 }}>
+                            <span className={`badge ${isActive ? 'badge-success' : 'badge-danger'}`}>
                               {isActive ? 'active' : 'inactive'}
                             </span>
                           </td>
@@ -726,9 +724,9 @@ export default function AcademicData() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-12 text-center text-slate-500">
-          <p className="text-base font-medium text-slate-700">Ready to search academic data</p>
-          <p className="text-xs text-slate-400 mt-1">Select an Entity and Academic Year above to view records.</p>
+        <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Ready to search academic data</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Select an Entity and Academic Year above to view records.</p>
         </div>
       )}
     </Layout>
