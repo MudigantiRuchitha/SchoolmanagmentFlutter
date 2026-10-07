@@ -472,8 +472,8 @@ export default function Classes() {
     }
 
     if (!trimmedSection) {
-      setFormError('Please select a Section!');
-      showToast('Please select a Section!', 'error');
+      setFormError('Section is required!');
+      showToast('Section is required!', 'error');
       return;
     }
 
@@ -1345,125 +1345,46 @@ export default function Classes() {
 
           <div className="form-row">
 
-
-            {/* CLASS DROPDOWN */}
-
+            {/* CLASS INPUT */}
             <div className="form-group">
-
               <label>
-                Class *
+                Class Name *
               </label>
-
-
-              <select
-
+              <input
+                type="text"
                 className="input"
-
+                placeholder="Enter class name (e.g. Class 1, Grade 10, UKG)"
                 value={form.name}
-
                 onChange={(e) => {
                   if (formError) setFormError('');
                   setForm({
-
                     ...form,
-
-                    name: e.target.value,
-
-                    // Reset section when class changes
-                    section: ''
-
+                    name: e.target.value
                   });
-
                 }}
-
                 required
-
-              >
-
-                <option value="">
-                  Select Class
-                </option>
-
-
-                {classOptions.map(
-                  className => (
-
-                    <option
-                      key={className}
-                      value={className}
-                    >
-
-                      {className}
-
-                    </option>
-
-                  )
-                )}
-
-              </select>
-
+              />
             </div>
 
-
-            {/* SECTION DROPDOWN */}
-
+            {/* SECTION INPUT */}
             <div className="form-group">
-
               <label>
                 Section / Division *
               </label>
-
-
-              <select
-
+              <input
+                type="text"
                 className="input"
-
+                placeholder="Enter section (e.g. A, B, Rose)"
                 value={form.section}
-
                 onChange={(e) => {
                   if (formError) setFormError('');
                   setForm({
-
                     ...form,
-
-                    section:
-                      e.target.value
-
+                    section: e.target.value
                   });
-
                 }}
-
-                disabled={!form.name}
                 required
-
-              >
-
-                <option value="">
-                  Select Section
-                </option>
-
-
-                {getSectionsForClass(
-                  form.name
-                ).map(section => {
-                  const alreadyExists = isSectionExistingForClass(
-                    form.name,
-                    section,
-                    editItem?.id,
-                    form.branchId
-                  );
-                  return (
-                    <option
-                      key={section}
-                      value={section}
-                    >
-                      {section} {alreadyExists ? '(Already exists)' : ''}
-                    </option>
-                  );
-                })}
-
-              </select>
-
+              />
             </div>
 
           </div>

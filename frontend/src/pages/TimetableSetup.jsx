@@ -692,6 +692,14 @@ export default function TimetableSetup() {
       return;
     }
 
+    if (!newPeriod.teacherId) {
+      showToast(
+        'Please assign a teacher.'
+      );
+
+      return;
+    }
+
     const nextNum =
       periodSlots.length + 1;
 
@@ -2719,7 +2727,6 @@ export default function TimetableSetup() {
 
                                   <option value="">
                                     Assign Teacher
-                                    (Optional)
                                   </option>
 
                                   {staffList.map(
@@ -3114,7 +3121,7 @@ export default function TimetableSetup() {
             <div className="form-group">
 
               <label>
-                Assigned Teacher
+                Assigned Teacher *
               </label>
 
               <select
@@ -3132,11 +3139,11 @@ export default function TimetableSetup() {
                     })
                   )
                 }
+                required
               >
 
                 <option value="">
                   Assign Teacher
-                  (Optional)
                 </option>
 
                 {staffList.map(

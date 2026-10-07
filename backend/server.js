@@ -155,10 +155,33 @@ app.use('/attendance/:orgCode/api', (req, res, next) => {
   next();
 }, mobileApiRouter);
 
-// Root Route
-app.get('/', (req, res) => {
-  res.send('<h1>Central School Management & Attendance API</h1><p>Server is active and operational.</p>');
-});
+// ============================================================
+// FRONTEND STATIC BUILD & SPA ROUTING (PAGE RELOAD SUPPORT)
+// ============================================================
+const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
+
+if (fs.existsSync(frontendDistPath)) {
+  // Serve built frontend assets
+  app.use(express.static(frontendDistPath));
+
+  // SPA catch-all route: serve index.html for client-side routing
+  app.get('*', (req, res, next) => {
+    if (
+      req.originalUrl.startsWith('/api') ||
+      req.originalUrl.startsWith('/uploads') ||
+      req.originalUrl.startsWith('/' + IMAGE_DIR) ||
+      req.originalUrl.startsWith('/attendance')
+    ) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+} else {
+  // Root Route fallback when frontend is not built
+  app.get('/', (req, res) => {
+    res.send('<h1>Central School Management & Attendance API</h1><p>Server is active and operational.</p>');
+  });
+}
 
 // 404 Handler
 app.use((req, res) => {
