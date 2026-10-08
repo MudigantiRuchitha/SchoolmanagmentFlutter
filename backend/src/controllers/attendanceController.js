@@ -1003,12 +1003,63 @@ async function downloadDailyReport(req, res) {
 // Get Academic Holidays list
 async function getHolidayDetails(req, res) {
   try {
-    const [rows] = await db.query('SELECT * FROM holidays');
+    const { Year, year } = req.body || {};
+    const targetYear = Number(Year ?? year ?? new Date().getFullYear());
+    const orgCode = String(req.orgCode || '').trim();
+
+    if (!orgCode) {
+      return res.json({
+        Status: 0,
+        Message: 'Organization code is required'
+      });
+    }
+
+    if (!Number.isInteger(targetYear) || targetYear < 1) {
+      return res.json({
+        Status: 0,
+        Message: 'A valid year is required'
+      });
+    }
+
+    const [organisationRows] = await db.query(
+      `SELECT id
+       FROM organisations
+       WHERE LOWER(code) = LOWER($1)
+       LIMIT 1`,
+      [orgCode]
+    );
+
+    if (organisationRows.length === 0) {
+      return res.json({
+        Status: 0,
+        Message: 'Organization not found'
+      });
+    }
+
+    const [rows] = await db.query(
+      `SELECT
+         id,
+         org_id,
+         cust_id,
+         TO_CHAR(COALESCE(holiday_date, date), 'YYYY-MM-DD') AS effective_holiday_date,
+         TO_CHAR(COALESCE(holiday_to_date, holiday_date, date), 'YYYY-MM-DD') AS effective_holiday_to_date,
+         holiday_desc,
+         description,
+         name,
+         is_range,
+         user_id
+       FROM holidays
+       WHERE org_id = $1
+         AND EXTRACT(YEAR FROM COALESCE(holiday_date, date)) = $2
+       ORDER BY COALESCE(holiday_date, date) ASC`,
+      [organisationRows[0].id, targetYear]
+    );
+
     const holidays = rows.map(r => ({
       HolidayId: r.id,
-      CustID: r.cust_id,
-      HolidayDate: r.holiday_date || r.date,
-      HolidayToDate: r.holiday_to_date || r.date,
+      CustID: r.org_id || r.cust_id,
+      HolidayDate: r.effective_holiday_date,
+      HolidayToDate: r.effective_holiday_to_date,
       HolidayDesc: r.holiday_desc || r.description || r.name,
       IsRange: r.is_range || 0,
       UserId: r.user_id
