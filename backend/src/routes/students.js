@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // Ensure first_name and last_name columns exist
 pool.query('ALTER TABLE students ADD COLUMN IF NOT EXISTS first_name VARCHAR(255), ADD COLUMN IF NOT EXISTS last_name VARCHAR(255)').catch(() => {});
@@ -15,9 +15,10 @@ router.get('/', authMiddleware, async (req, res) => {
              (
                SELECT STRING_AGG(st.full_name, ', ') 
                FROM staff st 
-               WHERE st.id = c.teacher_id 
+               WHERE (st.id = c.teacher_id 
                   OR (c.teacher_ids IS NOT NULL AND st.id = ANY(c.teacher_ids))
-                  OR st.staff_id = c.teacher_id::text
+                  OR st.staff_id = c.teacher_id::text)
+                  AND (st.is_deleted IS NOT TRUE)
              ) as teacher_name,
              (
                SELECT json_agg(
@@ -32,14 +33,15 @@ router.get('/', authMiddleware, async (req, res) => {
                  )
                )
                FROM staff st
-               WHERE st.id = c.teacher_id 
+               WHERE (st.id = c.teacher_id 
                   OR (c.teacher_ids IS NOT NULL AND st.id = ANY(c.teacher_ids))
-                  OR st.staff_id = c.teacher_id::text
+                  OR st.staff_id = c.teacher_id::text)
+                  AND (st.is_deleted IS NOT TRUE)
              ) as assigned_staff
       FROM students s
       LEFT JOIN classes c ON c.id = s.class_id
       LEFT JOIN branches b ON b.id = s.branch_id
-      WHERE s.org_id = $1`;
+      WHERE s.org_id = $1 AND (s.is_deleted IS NOT TRUE)`;
     const params = [req.admin.orgId];
     let paramCount = 1;
     if (req.admin.branchAccess && req.admin.branchAccess !== 'all') {
@@ -230,9 +232,44 @@ router.post('/bulk-import', authMiddleware, async (req, res) => {
         continue;
       }
 
+      if (fullName && !/^[a-zA-Z\s]+$/.test(fullName)) {
+        errors.push(
+          `CSV Row ${rowNum} (${fullName}): Student name must contain only characters (letters and spaces).`
+        );
+        continue;
+      }
+
       if (!admissionNo) {
         errors.push(
           `CSV Row ${rowNum} (${fullName}): Admission number is required.`
+        );
+        continue;
+      }
+
+      if (admissionNo && !/^[a-zA-Z0-9]+$/.test(admissionNo)) {
+        errors.push(
+          `CSV Row ${rowNum} (${fullName}): Admission number "${admissionNo}" must contain only letters and numbers (char + int).`
+        );
+        continue;
+      }
+
+      if (rollNo && !/^[a-zA-Z0-9]+$/.test(rollNo)) {
+        errors.push(
+          `CSV Row ${rowNum} (${fullName}): Roll number "${rollNo}" must contain only letters and numbers (char + int).`
+        );
+        continue;
+      }
+
+      if (row.phone && !/^[0-9]+$/.test(String(row.phone).trim())) {
+        errors.push(
+          `CSV Row ${rowNum} (${fullName}): Mobile number must contain integers only (digits).`
+        );
+        continue;
+      }
+
+      if (row.parentPhone && !/^[0-9]+$/.test(String(row.parentPhone).trim())) {
+        errors.push(
+          `CSV Row ${rowNum} (${fullName}): Parent mobile number must contain integers only (digits).`
         );
         continue;
       }
@@ -454,11 +491,61 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const { admissionNo, rollNo, firstName, lastName, fullName, phone, parentName, parentPhone, gender, dateOfBirth, classId, branchId } = req.body;
     
-    const fName = firstName !== undefined ? firstName.trim() : (fullName ? fullName.split(' ')[0] : '');
-    const lName = lastName !== undefined ? lastName.trim() : (fullName ? fullName.split(' ').slice(1).join(' ') : '');
-    const computedFullName = `${fName} ${lName}`.trim() || fullName || 'Student';
+    const fName = firstName !== undefined ? firstName.trim() : (fullName ? fullName.split(' ')[0].trim() : '');
+    const lName = lastName !== undefined ? lastName.trim() : (fullName ? fullName.split(' ').slice(1).join(' ').trim() : '');
+    const computedFullName = `${fName} ${lName}`.trim() || (fullName ? fullName.trim() : 'Student');
 
     if (!fName && !computedFullName) return res.status(400).json({ success: false, message: 'First name is required.' });
+
+    // 1. Name restriction: Letters and spaces only
+    if (fName && !/^[a-zA-Z\s]+$/.test(fName)) {
+      return res.status(400).json({ success: false, message: 'First name must contain only alphabets (characters).' });
+    }
+    if (lName && !/^[a-zA-Z\s]+$/.test(lName)) {
+      return res.status(400).json({ success: false, message: 'Last name must contain only alphabets (characters).' });
+    }
+    if (parentName && !/^[a-zA-Z\s]+$/.test(String(parentName).trim())) {
+      return res.status(400).json({ success: false, message: 'Parent name must contain only alphabets (characters).' });
+    }
+
+    // 2. Admission number: char + int (alphanumeric only)
+    const cleanAdmissionNo = admissionNo ? String(admissionNo).trim() : '';
+    if (!cleanAdmissionNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admission number is required.'
+      });
+    }
+    if (!/^[a-zA-Z0-9]+$/.test(cleanAdmissionNo)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admission number must contain only letters and numbers (char + int).'
+      });
+    }
+
+    // 3. Roll number: char + int (alphanumeric only)
+    const rNo = rollNo ? String(rollNo).trim() : cleanAdmissionNo;
+    if (rNo && !/^[a-zA-Z0-9]+$/.test(rNo)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Roll number must contain only letters and numbers (char + int).'
+      });
+    }
+
+    // 4. Mobile number: integers only (digits only)
+    if (phone && !/^[0-9]+$/.test(String(phone).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must contain integers only (digits).'
+      });
+    }
+
+    if (parentPhone && !/^[0-9]+$/.test(String(parentPhone).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parent mobile number must contain integers only (digits).'
+      });
+    }
 
     let finalBranchId = req.admin.branchAccess !== 'all' ? Number(req.admin.branchAccess) : (branchId || null);
     if (!finalBranchId && classId) {
@@ -467,16 +554,6 @@ router.post('/', authMiddleware, async (req, res) => {
         finalBranchId = cRes.rows[0].branch_id;
       }
     }
-
-    const rNo = rollNo || cleanAdmissionNo || '';
-    const cleanAdmissionNo = admissionNo ? String(admissionNo).trim() : '';
-
-if (!cleanAdmissionNo) {
-  return res.status(400).json({
-    success: false,
-    message: 'Admission number is required.'
-  });
-}
 
 const duplicateCheck = await pool.query(
   `SELECT id, full_name
@@ -570,6 +647,29 @@ router.put('/:id', authMiddleware, async (req, res) => {
       lName = l;
     }
 
+    // Validation checks
+    if (fName !== undefined && fName !== '' && !/^[a-zA-Z\s]+$/.test(fName)) {
+      return res.status(400).json({ success: false, message: 'First name must contain only alphabets (characters).' });
+    }
+    if (lName !== undefined && lName !== '' && !/^[a-zA-Z\s]+$/.test(lName)) {
+      return res.status(400).json({ success: false, message: 'Last name must contain only alphabets (characters).' });
+    }
+    if (parentName !== undefined && parentName !== '' && !/^[a-zA-Z\s]+$/.test(String(parentName).trim())) {
+      return res.status(400).json({ success: false, message: 'Parent name must contain only alphabets (characters).' });
+    }
+    if (admissionNo !== undefined && admissionNo !== '' && !/^[a-zA-Z0-9]+$/.test(String(admissionNo).trim())) {
+      return res.status(400).json({ success: false, message: 'Admission number must contain only letters and numbers (char + int).' });
+    }
+    if (rollNo !== undefined && rollNo !== '' && !/^[a-zA-Z0-9]+$/.test(String(rollNo).trim())) {
+      return res.status(400).json({ success: false, message: 'Roll number must contain only letters and numbers (char + int).' });
+    }
+    if (phone !== undefined && phone !== '' && !/^[0-9]+$/.test(String(phone).trim())) {
+      return res.status(400).json({ success: false, message: 'Mobile number must contain integers only (digits).' });
+    }
+    if (parentPhone !== undefined && parentPhone !== '' && !/^[0-9]+$/.test(String(parentPhone).trim())) {
+      return res.status(400).json({ success: false, message: 'Parent mobile number must contain integers only (digits).' });
+    }
+
     let finalBranchId = branchId;
     if (!finalBranchId && classId) {
       const cRes = await pool.query('SELECT branch_id FROM classes WHERE id = $1', [classId]);
@@ -624,10 +724,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/students/:id
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     await pool.query(
-      `DELETE FROM students WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND branch_id = $3' : ''}`,
+      `UPDATE students SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND branch_id = $3' : ''}`,
       req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
     );
     res.json({ success: true, message: 'Student deleted.' });

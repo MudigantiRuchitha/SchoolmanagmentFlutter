@@ -20,7 +20,8 @@ import {
   MdWorkspaces,
   MdCategory,
   MdMenuBook,
-  MdMenu
+  MdMenu,
+  MdClose
 } from 'react-icons/md';
 
 const navItems = [
@@ -54,7 +55,7 @@ const navItems = [
   ]},
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onCloseMobile }) {
   const { user, org, logout } = useAuth();
 
   const [timetableAccess, setTimetableAccess] = useState(
@@ -151,12 +152,12 @@ useEffect(() => {
   }));
 
   return (
-    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
 
       {/* ==================== SIDEBAR HEADER ==================== */}
       <div className="sidebar-top">
 
-        <NavLink to="/dashboard" className="sidebar-logo">
+        <NavLink to="/dashboard" className="sidebar-logo" onClick={onCloseMobile}>
 
           <div className="sidebar-logo-icon">
             <MdSchool />
@@ -176,7 +177,7 @@ useEffect(() => {
 
         </NavLink>
 
-        {/* Collapse / Expand Button */}
+        {/* Collapse / Expand Button (Desktop) */}
         <button
           type="button"
           className="sidebar-toggle"
@@ -185,6 +186,17 @@ useEffect(() => {
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <MdMenu />
+        </button>
+
+        {/* Close Button (Mobile Drawer) */}
+        <button
+          type="button"
+          className="sidebar-mobile-close"
+          onClick={onCloseMobile}
+          title="Close menu"
+          aria-label="Close navigation menu"
+        >
+          <MdClose size={22} />
         </button>
 
       </div>
@@ -215,6 +227,9 @@ useEffect(() => {
         'sidebarScrollTop',
         String(sidebarNavRef.current.scrollTop)
       );
+    }
+    if (onCloseMobile) {
+      onCloseMobile();
     }
   }}
   className={({ isActive }) =>
@@ -259,8 +274,10 @@ useEffect(() => {
                 {user?.fullName || user?.username}
               </div>
 
-              <div className="sidebar-user-role">
-                {user?.role}
+              <div className="sidebar-user-role" style={{ marginTop: 3 }}>
+                <span className={`badge ${user?.role === 'admin' ? 'badge-purple' : user?.role === 'manager' ? 'badge-info' : 'badge-gray'}`} style={{ fontSize: 10, padding: '2px 8px', textTransform: 'capitalize' }}>
+                  {user?.role === 'admin' ? 'Full Access' : user?.role === 'manager' ? 'Read & Write' : 'Only Read (Viewer)'}
+                </span>
               </div>
 
             </div>

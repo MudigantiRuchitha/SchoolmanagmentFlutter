@@ -5,7 +5,7 @@ import {
   useEffect
 } from 'react';
 
-import { getMe } from '../api';
+import { getMe, logoutUser } from '../api';
 
 const AuthContext = createContext(null);
 
@@ -58,6 +58,11 @@ export function AuthProvider({ children }) {
         const currentUser = {
           ...parsedUser,
           ...serverUser,
+
+          role:
+            serverUser.role ||
+            parsedUser.role ||
+            'admin',
 
           fullName:
             serverUser.fullName ||
@@ -136,6 +141,11 @@ export function AuthProvider({ children }) {
         ...userData,
         ...serverUser,
 
+        role:
+          serverUser.role ||
+          userData.role ||
+          'admin',
+
         fullName:
           serverUser.fullName ||
           serverUser.full_name ||
@@ -167,20 +177,29 @@ export function AuthProvider({ children }) {
         error
       );
 
+      const fallbackUser = {
+        ...userData,
+        role: userData.role || 'admin'
+      };
+
       localStorage.setItem(
         'user',
-        JSON.stringify(userData)
+        JSON.stringify(fallbackUser)
       );
 
-      setUser(userData);
+      setUser(fallbackUser);
       setOrg(orgData);
 
-      return userData;
+      return fallbackUser;
     }
   };
 
-  const logout = () => {
-
+  const logout = async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // Ignore network errors on logout
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('org');
@@ -189,11 +208,22 @@ export function AuthProvider({ children }) {
     setOrg(null);
   };
 
+  const currentRole = (user?.role || 'admin').toLowerCase();
+  const isReadOnly = currentRole === 'viewer';
+  const canWrite = currentRole === 'admin' || currentRole === 'manager';
+  const isFullAdmin = currentRole === 'admin';
+  const canDelete = currentRole === 'admin';
+
   return (
     <AuthContext.Provider
       value={{
         user,
         org,
+        role: currentRole,
+        isReadOnly,
+        canWrite,
+        isFullAdmin,
+        canDelete,
         login,
         logout,
         loading,

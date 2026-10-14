@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { isAfterSchoolHour } = require('../utils/attendanceHelper');
 
 // Helper to extract clean HH:MM:SS time string for PostgreSQL TIME data type
 function extractTime(val) {
@@ -305,14 +306,16 @@ async function bulkAttendanceMark(req, res) {
         const strStf = String(staffIdent);
         const padStf = strStf.padStart(2, '0');
         const [stfRows] = await conn.query(
-          'SELECT id, org_id FROM staff WHERE id::text = $1 OR staff_id = $1 OR biometric_id = $1 OR id::text = $2 OR staff_id = $2 OR LOWER(username) = LOWER($1) LIMIT 1',
+          'SELECT id, org_id, expected_check_in FROM staff WHERE id::text = $1 OR staff_id = $1 OR biometric_id = $1 OR id::text = $2 OR staff_id = $2 OR LOWER(username) = LOWER($1) LIMIT 1',
           [strStf, padStf]
         );
         
 
         if (stfRows.length > 0) {
           const stf = stfRows[0];
-          console.log(`[bulkAttendanceMark] Matched Staff ID ${stf.id} for identifier "${staffIdent}"`);
+          const isLate = isAfterSchoolHour(punchTime, stf.expected_check_in);
+          const status = isLate ? 'late' : 'present';
+          console.log(`[bulkAttendanceMark] Matched Staff ID ${stf.id} for identifier "${staffIdent}", punchTime: ${punchTime}, status: ${status}`);
           await conn.query(
             `INSERT INTO staff_attendance_punches (staff_id, org_id, date, punch_time, mode)
              VALUES ($1, $2, $3, $4, 'device')`,
@@ -321,16 +324,19 @@ async function bulkAttendanceMark(req, res) {
           // Upsert into staff_attendance table for Web Portal!
           await conn.query(
             `INSERT INTO staff_attendance (staff_id, org_id, date, check_in, shift_status, mode, notes)
-             VALUES ($1, $2, $3, $4, 'present', 'device', 'Marked via Attendance Device')
+             VALUES ($1, $2, $3, $4, $5, 'device', 'Marked via Attendance Device')
              ON CONFLICT (staff_id, date) DO UPDATE SET
                check_in = COALESCE(staff_attendance.check_in, EXCLUDED.check_in),
                check_out = CASE
                  WHEN staff_attendance.check_in IS NOT NULL THEN EXCLUDED.check_in
                  ELSE staff_attendance.check_out
                END,
-               shift_status = 'present',
+               shift_status = CASE
+                 WHEN staff_attendance.check_in IS NULL THEN EXCLUDED.shift_status
+                 ELSE staff_attendance.shift_status
+               END,
                mode = 'device'`,
-            [stf.id, stf.org_id, sessionDate, punchTime]
+            [stf.id, stf.org_id, sessionDate, punchTime, status]
           );
         }
 
@@ -382,12 +388,14 @@ async function submitTeacherAttendance(req, res) {
     );
 
     const [tRows] = await db.query(
-      'SELECT id, org_id FROM staff WHERE id::text = $1::text OR staff_id = $1::text OR LOWER(username) = LOWER($1) LIMIT 1',
+      'SELECT id, org_id, expected_check_in FROM staff WHERE id::text = $1::text OR staff_id = $1::text OR LOWER(username) = LOWER($1) LIMIT 1',
       [String(UserId)]
     );
 
     if (tRows.length > 0) {
       const stf = tRows[0];
+      const isLate = isAfterSchoolHour(sessionTime, stf.expected_check_in);
+      const status = isLate ? 'late' : 'present';
       await db.query(
         `INSERT INTO staff_attendance_punches (staff_id, org_id, date, punch_time, mode)
          VALUES ($1, $2, $3, $4, 'device')`,
@@ -395,16 +403,19 @@ async function submitTeacherAttendance(req, res) {
       );
       await db.query(
         `INSERT INTO staff_attendance (staff_id, org_id, date, check_in, shift_status, mode, notes)
-         VALUES ($1, $2, $3, $4, 'present', 'device', 'Marked via Attendance Device')
+         VALUES ($1, $2, $3, $4, $5, 'device', 'Marked via Attendance Device')
          ON CONFLICT (staff_id, date) DO UPDATE SET
            check_in = COALESCE(staff_attendance.check_in, EXCLUDED.check_in),
            check_out = CASE
              WHEN staff_attendance.check_in IS NOT NULL THEN EXCLUDED.check_in
              ELSE staff_attendance.check_out
            END,
-           shift_status = 'present',
+           shift_status = CASE
+             WHEN staff_attendance.check_in IS NULL THEN EXCLUDED.shift_status
+             ELSE staff_attendance.shift_status
+           END,
            mode = 'device'`,
-        [stf.id, stf.org_id, sessionDate, sessionTime]
+        [stf.id, stf.org_id, sessionDate, sessionTime, status]
       );
     }
 

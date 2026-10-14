@@ -14,7 +14,7 @@ router.get('/', authMiddleware, async (req, res) => {
       JOIN staff s ON s.id = l.staff_id
       LEFT JOIN branches b ON b.id = s.branch_id
       LEFT JOIN admin_users au ON au.id = l.reviewed_by
-      WHERE l.org_id = $1`;
+      WHERE l.org_id = $1 AND (l.is_deleted IS NOT TRUE) AND (s.is_deleted IS NOT TRUE)`;
     const params = [req.admin.orgId];
     let pc = 1;
 
@@ -50,7 +50,7 @@ router.get('/', authMiddleware, async (req, res) => {
 // GET /api/leaves/types - List leave types
 router.get('/types', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM leave_types WHERE org_id = $1 ORDER BY name', [req.admin.orgId]);
+    const result = await pool.query('SELECT * FROM leave_types WHERE org_id = $1 AND (is_deleted IS NOT TRUE) ORDER BY name', [req.admin.orgId]);
     res.json({ success: true, leaveTypes: result.rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -75,7 +75,7 @@ router.post('/types', authMiddleware, async (req, res) => {
 // DELETE /api/leaves/types/:id - Delete leave type
 router.delete('/types/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM leave_types WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE leave_types SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Leave type deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -149,7 +149,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // DELETE /api/leaves/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM leaves WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE leaves SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Leave deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

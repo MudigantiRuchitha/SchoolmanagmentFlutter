@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // ============================================================
 // GET /api/classes
 // ============================================================
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { branch_id, academic_group_id } = req.query;
+    const { branch_id, academic_group_id, academic_year } = req.query;
 
     let query = `
       SELECT
@@ -23,8 +23,9 @@ router.get('/', authMiddleware, async (req, res) => {
             ORDER BY s.full_name
           )
           FROM staff s
-          WHERE s.id = ANY(c.teacher_ids)
-             OR s.id = c.teacher_id
+          WHERE (s.id = ANY(c.teacher_ids)
+             OR s.id = c.teacher_id)
+            AND (s.is_deleted IS NOT TRUE)
         ) AS teacher_name,
 
         (
@@ -32,6 +33,7 @@ router.get('/', authMiddleware, async (req, res) => {
           FROM students
           WHERE class_id = c.id
             AND is_active = true
+            AND (is_deleted IS NOT TRUE)
         ) AS student_count
 
       FROM classes c
@@ -43,6 +45,7 @@ router.get('/', authMiddleware, async (req, res) => {
         ON b.id = c.branch_id
 
       WHERE c.org_id = $1
+        AND (c.is_deleted IS NOT TRUE)
     `;
 
     const params = [req.admin.orgId];
@@ -65,6 +68,13 @@ router.get('/', authMiddleware, async (req, res) => {
       paramCount++;
       query += ` AND c.academic_group_id = $${paramCount}`;
       params.push(academic_group_id);
+    }
+
+    // Filter by academic year
+    if (academic_year) {
+      paramCount++;
+      query += ` AND c.academic_year = $${paramCount}`;
+      params.push(academic_year);
     }
 
     query += `
@@ -194,14 +204,41 @@ router.post('/', authMiddleware, async (req, res) => {
       section,
       academicGroupId,
       branchId,
+      academicYear,
       teacherId,
       teacherIds
     } = req.body;
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: 'Class name is required.'
+      });
+    }
+
+    if (!section || !section.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Section is required.'
+      });
+    }
+
+    const scopedBranchId = req.admin.branchAccess && req.admin.branchAccess !== 'all'
+      ? Number(req.admin.branchAccess)
+      : (branchId ? Number(branchId) : null);
+
+    if (!scopedBranchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Branch is required.'
+      });
+    }
+
+    const trimmedAcademicYear = (academicYear || '').trim();
+    if (!trimmedAcademicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Academic Year is required.'
       });
     }
 
@@ -230,18 +267,22 @@ router.post('/', authMiddleware, async (req, res) => {
         ? idsArray[0]
         : null;
 
-    const scopedBranchId = req.admin.branchAccess !== 'all'
-      ? Number(req.admin.branchAccess)
-      : (branchId ? Number(branchId) : null);
+    if (!primaryId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Assigned Staff is required.'
+      });
+    }
 
     const trimmedName = name.trim();
-    const trimmedSection = (section || '').trim();
+    const trimmedSection = section.trim();
 
-    // Check if class with same name and section already exists in this branch / org
+    // Check if class with same name and section already exists in this branch / org / academic_year
     const duplicateCheck = await pool.query(
       `
       SELECT id FROM classes
       WHERE org_id = $1
+        AND (is_deleted IS NOT TRUE)
         AND (
           $2::int IS NULL
           OR branch_id = $2::int
@@ -255,13 +296,19 @@ router.post('/', authMiddleware, async (req, res) => {
           TRIM(TRAILING REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g') FROM REGEXP_REPLACE(LOWER($3), '[^a-z0-9]', '', 'g'))
         )
         AND REGEXP_REPLACE(LOWER(COALESCE(section, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g')
+        AND (
+          $5::text IS NULL
+          OR academic_year IS NULL
+          OR academic_year = $5::text
+        )
       LIMIT 1
       `,
       [
         req.admin.orgId,
         scopedBranchId,
         trimmedName,
-        trimmedSection
+        trimmedSection,
+        trimmedAcademicYear
       ]
     );
 
@@ -269,7 +316,7 @@ router.post('/', authMiddleware, async (req, res) => {
       const secMsg = trimmedSection ? ` with section "${trimmedSection}"` : '';
       return res.status(400).json({
         success: false,
-        message: `Class "${trimmedName}"${secMsg} already exists.`
+        message: `Class "${trimmedName}"${secMsg} already exists in this branch and academic year.`
       });
     }
 
@@ -282,10 +329,11 @@ router.post('/', authMiddleware, async (req, res) => {
         section,
         academic_group_id,
         branch_id,
+        academic_year,
         teacher_id,
         teacher_ids
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
       `,
       [
@@ -294,7 +342,8 @@ router.post('/', authMiddleware, async (req, res) => {
         trimmedName,
         trimmedSection || null,
         academicGroupId || null,
-        scopedBranchId || null,
+        scopedBranchId,
+        trimmedAcademicYear,
         primaryId,
         idsArray
       ]
@@ -326,6 +375,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
       section,
       academicGroupId,
       branchId,
+      academicYear,
       teacherId,
       teacherIds,
       isActive
@@ -353,6 +403,20 @@ router.put('/:id', authMiddleware, async (req, res) => {
     }
 
     const currentClass = existingResult.rows[0];
+
+    if (branchId !== undefined && (branchId === null || String(branchId).trim() === '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Branch is required.'
+      });
+    }
+
+    if (academicYear !== undefined && (academicYear === null || String(academicYear).trim() === '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Academic Year is required.'
+      });
+    }
 
     let idsArray = undefined;
 
@@ -387,19 +451,28 @@ router.put('/:id', authMiddleware, async (req, res) => {
           )
         : undefined;
 
-    const scopedBranchId = req.admin.branchAccess !== 'all'
+    if (idsArray !== undefined && idsArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Assigned Staff is required.'
+      });
+    }
+
+    const scopedBranchId = req.admin.branchAccess && req.admin.branchAccess !== 'all'
       ? Number(req.admin.branchAccess)
       : (branchId !== undefined ? (branchId ? Number(branchId) : null) : currentClass.branch_id);
 
     const targetName = name !== undefined && name !== null ? String(name).trim() : (currentClass.class_name || currentClass.name || '').trim();
     const targetSection = section !== undefined && section !== null ? String(section).trim() : (currentClass.section || '').trim();
+    const targetAcademicYear = academicYear !== undefined && academicYear !== null ? String(academicYear).trim() : (currentClass.academic_year || '').trim();
 
-    // Check duplicate if name, section, or branchId is modified
-    if (name !== undefined || section !== undefined || branchId !== undefined) {
+    // Check duplicate if name, section, branchId, or academicYear is modified
+    if (name !== undefined || section !== undefined || branchId !== undefined || academicYear !== undefined) {
       const duplicateCheck = await pool.query(
         `
         SELECT id FROM classes
         WHERE org_id = $1
+          AND (is_deleted IS NOT TRUE)
           AND (
             $2::int IS NULL
             OR branch_id = $2::int
@@ -413,7 +486,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
             TRIM(TRAILING REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g') FROM REGEXP_REPLACE(LOWER($3), '[^a-z0-9]', '', 'g'))
           )
           AND REGEXP_REPLACE(LOWER(COALESCE(section, '')), '[^a-z0-9]', '', 'g') = REGEXP_REPLACE(LOWER($4), '[^a-z0-9]', '', 'g')
-          AND id != $5
+          AND (
+            $5::text IS NULL
+            OR academic_year IS NULL
+            OR academic_year = $5::text
+          )
+          AND id != $6
         LIMIT 1
         `,
         [
@@ -421,6 +499,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
           scopedBranchId,
           targetName,
           targetSection,
+          targetAcademicYear || null,
           classId
         ]
       );
@@ -429,7 +508,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
         const secMsg = targetSection ? ` with section "${targetSection}"` : '';
         return res.status(400).json({
           success: false,
-          message: `Class "${targetName}"${secMsg} already exists.`
+          message: `Class "${targetName}"${secMsg} already exists in this branch and academic year.`
         });
       }
     }
@@ -439,50 +518,27 @@ router.put('/:id', authMiddleware, async (req, res) => {
       UPDATE classes
       SET
         name = COALESCE($1, name),
-
-        class_name = COALESCE(
-          $1,
-          class_name
-        ),
-
-        section = COALESCE(
-          $2,
-          section
-        ),
-
-        academic_group_id = COALESCE(
-          $3,
-          academic_group_id
-        ),
-
-        branch_id = COALESCE(
-          $4,
-          branch_id
-        ),
-
+        class_name = COALESCE($1, class_name),
+        section = COALESCE($2, section),
+        academic_group_id = COALESCE($3, academic_group_id),
+        branch_id = COALESCE($4, branch_id),
+        academic_year = COALESCE($5, academic_year),
         teacher_id =
           CASE
-            WHEN $5::boolean
-            THEN $6::integer
+            WHEN $6::boolean
+            THEN $7::integer
             ELSE teacher_id
           END,
-
         teacher_ids =
           CASE
-            WHEN $5::boolean
-            THEN $7::integer[]
+            WHEN $6::boolean
+            THEN $8::integer[]
             ELSE teacher_ids
           END,
-
-        is_active = COALESCE(
-          $8,
-          is_active
-        )
-
-      WHERE id = $9
-        AND org_id = $10
-        ${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? 'AND branch_id = $11' : ''}
-
+        is_active = COALESCE($9, is_active)
+      WHERE id = $10
+        AND org_id = $11
+        ${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? 'AND branch_id = $12' : ''}
       RETURNING *
       `,
       [
@@ -490,21 +546,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
         section || null,
         academicGroupId || null,
         scopedBranchId || null,
-
+        targetAcademicYear || null,
         idsArray !== undefined,
-
-        primaryId !== undefined
-          ? primaryId
-          : null,
-
-        idsArray !== undefined
-          ? idsArray
-          : null,
-
-        isActive !== undefined
-          ? isActive
-          : null,
-
+        primaryId !== undefined ? primaryId : null,
+        idsArray !== undefined ? idsArray : null,
+        isActive !== undefined ? isActive : null,
         req.params.id,
         req.admin.orgId,
         ...(req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.admin.branchAccess] : [])
@@ -595,11 +641,12 @@ router.put('/:id/assign-staff', authMiddleware, async (req, res) => {
 // ============================================================
 // DELETE /api/classes/:id
 // ============================================================
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     await pool.query(
       `
-      DELETE FROM classes
+      UPDATE classes
+      SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP
       WHERE id = $1
         AND org_id = $2
         ${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? 'AND branch_id = $3' : ''}

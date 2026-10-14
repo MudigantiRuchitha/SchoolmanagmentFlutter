@@ -7,7 +7,7 @@ const { authMiddleware } = require('../middleware/auth');
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { year } = req.query;
-    let query = 'SELECT * FROM holidays WHERE org_id = $1';
+    let query = 'SELECT * FROM holidays WHERE org_id = $1 AND (is_deleted IS NOT TRUE)';
     const params = [req.admin.orgId];
 
     if (year) {
@@ -57,7 +57,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // DELETE /api/holidays/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM holidays WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE holidays SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Holiday deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

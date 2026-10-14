@@ -55,7 +55,7 @@ function buildPublicImageUrl(value, req) {
 async function getStudents(req, res) {
   const classId = req.params.classId;
   try {
-    const [rows] = await db.query('SELECT * FROM students WHERE class_id = $1 AND is_active = true', [classId]);
+    const [rows] = await db.query('SELECT * FROM students WHERE class_id = $1 AND is_active = true AND (is_deleted IS NOT TRUE)', [classId]);
     const students = rows.map(s => ({
       studentId: s.id,
       fullName: s.full_name,
@@ -110,7 +110,8 @@ async function getDeviceStudents(req, res) {
        FROM students s 
        LEFT JOIN classes c ON c.id = s.class_id 
        WHERE (s.class_id::text = $1::text OR c.id::text = $1::text) 
-         AND (s.is_active = true OR s.is_active IS NULL)`,
+         AND (s.is_active = true OR s.is_active IS NULL)
+         AND (s.is_deleted IS NOT TRUE)`,
       [String(targetClassId)]
     );
 
@@ -250,7 +251,7 @@ async function getAllFaces(req, res) {
     const [rows] = await db.query(
       `SELECT s.id, s.full_name as name, s.face_embedding as embedding 
       FROM students s 
-      WHERE s.has_face_data = true`
+      WHERE s.has_face_data = true AND (s.is_deleted IS NOT TRUE)`
     );
 
     const faces = rows.map(r => ({

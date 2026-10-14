@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
+import ExportCSVModal from '../components/ExportCSVModal';
 import { useAuth } from '../context/AuthContext';
 import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 import ClassSectionSelect from '../components/ClassSectionSelect';
 import { getStaff, createStaff, updateStaff, deleteStaff, getBranches, getClasses, assignStaffClasses, bulkImportStaff } from '../api';
-import { MdAdd, MdEdit, MdDelete, MdSearch, MdPeople, MdCheckCircle, MdCancel, MdDownload, MdUpload, MdClass, MdVisibility, MdVisibilityOff, MdFilePresent, MdPerson, MdWarning } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdSearch, MdPeople, MdCheckCircle, MdCancel, MdDownload, MdUpload, MdClass, MdVisibility, MdVisibilityOff, MdFilePresent, MdPerson, MdWarning, MdAccessTime } from 'react-icons/md';
+import { downloadCSV, filterRecordsByDateRange, generateExportFilename } from '../utils/csvExport';
 const ROLES = ['teaching', 'non-teaching', 'management'];
 const emptyForm = {
     staffId: '',
@@ -20,9 +23,21 @@ const emptyForm = {
     designation: '',
     gender: '',
     dateOfJoining: '',
+    expectedCheckIn: '09:00',
+    expectedCheckOut: '17:00',
     isActive: true
 };
 const cloneEmptyForm = () => ({ ...emptyForm });
+const formatTime12 = (timeStr) => {
+    if (!timeStr) return '09:00 AM';
+    const clean = String(timeStr).slice(0, 5);
+    const [h, m] = clean.split(':');
+    if (h === undefined || m === undefined) return timeStr;
+    const hourNum = parseInt(h, 10);
+    const ampm = hourNum >= 12 ? 'PM' : 'AM';
+    const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
+    return `${formattedHour}:${m} ${ampm}`;
+};
 const normalizeId = value => value === null || value === undefined ? '' : String(value).trim();
 const normalizeStaffId = value => normalizeId(value).toLowerCase();
 const cleanPhoneNumber = value => {
@@ -106,7 +121,7 @@ const isClassAssignedToStaff = (classItem, staffItem) => {
     return getAssignedTeacherIds(classItem).includes(staffId);
 };
 export default function Staff() {
-    const { user } = useAuth();
+    const { user, isReadOnly, canDelete } = useAuth();
     const [staff, setStaff] = useState([]);
     const [branches, setBranches] = useState([]);
     const [classes, setClasses] = useState([]);
@@ -142,7 +157,39 @@ export default function Staff() {
     // Staff View Modal
     const [showStaffViewModal, setShowStaffViewModal] = useState(false);
     const [viewStaff, setViewStaff] = useState(null);
+    const [showExportModal, setShowExportModal] = useState(false);
     const [toast, setToast] = useState('');
+
+    // Confirmation Warning Modal state
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        title: 'Are you sure?',
+        message: '',
+        confirmText: 'Yes, Proceed',
+        type: 'warning',
+        onConfirm: null,
+        loading: false
+    });
+
+    const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+        setConfirmDialog({
+            isOpen: true,
+            title,
+            message,
+            confirmText,
+            type,
+            onConfirm: async () => {
+                setConfirmDialog(prev => ({ ...prev, loading: true }));
+                try {
+                    await onConfirm();
+                    setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+                } catch (err) {
+                    setConfirmDialog(prev => ({ ...prev, loading: false }));
+                }
+            },
+            loading: false
+        });
+    };
     const filterBranchScoped = items => {
         const branchAccess = user?.branchAccess;
         if (!branchAccess || branchAccess === 'all') {
@@ -225,11 +272,7 @@ export default function Staff() {
         setFieldErrors(errors);
         return Object.keys(errors).length === 0;
     };
-    const handleSubmit = async (e) => {
-        e?.preventDefault();
-        if (!validateForm()) {
-            return;
-        }
+    const executeSave = async () => {
         const cleanedPhone = cleanPhoneNumber(form.phone);
         const branchId = form.branchId || getBranchScope() || '';
         const payload = {
@@ -241,7 +284,9 @@ export default function Staff() {
             email: String(form.email || '').trim(),
             designation: String(form.designation || '').trim(),
             phone: cleanedPhone,
-            branchId
+            branchId,
+            expectedCheckIn: form.expectedCheckIn || '09:00',
+            expectedCheckOut: form.expectedCheckOut || '17:00'
         };
         // Do not overwrite an existing password with an empty value while editing.
         if (editItem && !String(form.password || '').trim()) {
@@ -296,35 +341,77 @@ export default function Staff() {
             setSaving(false);
         }
     };
-    const handleToggleStatus = async (s) => {
-        try {
-            await updateStaff(s.id, {
-                isActive: !Boolean(s.is_active)
-            });
-            showToast(`Staff "${s.full_name || s.staff_id}" ${!s.is_active ? 'activated' : 'deactivated'}.`);
-            await fetchInit();
-        }
-        catch (err) {
-            showToast(err.response?.data?.message ||
-                err.message ||
-                'Failed to update status.');
-        }
-    };
-    const handleDelete = async (s) => {
-        const name = s.full_name || s.staff_id || 'this staff member';
-        if (!window.confirm(`Delete staff member "${name}"?`)) {
+
+    const handleSubmit = async (e) => {
+        e?.preventDefault();
+        if (!validateForm()) {
             return;
         }
-        try {
-            await deleteStaff(s.id);
-            showToast('Staff deleted.');
-            await fetchInit();
+
+        if (!editItem) {
+            const staffName = `${form.firstName || ''} ${form.lastName || ''}`.trim() || form.username || 'this staff member';
+            requestConfirm({
+                title: 'Are you sure?',
+                message: `Are you sure you want to add new staff member "${staffName}"?`,
+                confirmText: 'Yes, Add Staff',
+                type: 'primary',
+                onConfirm: async () => {
+                    await executeSave();
+                }
+            });
+            return;
         }
-        catch (err) {
-            showToast(err.response?.data?.message ||
-                err.message ||
-                'Failed to delete staff.');
-        }
+
+        await executeSave();
+    };
+
+    const handleToggleStatus = (s) => {
+        const nextStatus = !Boolean(s.is_active);
+        requestConfirm({
+            title: 'Are you sure?',
+            message: `Are you sure you want to ${nextStatus ? 'activate' : 'deactivate'} staff member "${s.full_name || s.staff_id}"?`,
+            confirmText: nextStatus ? 'Yes, Activate' : 'Yes, Deactivate',
+            type: nextStatus ? 'success' : 'warning',
+            onConfirm: async () => {
+                try {
+                    await updateStaff(s.id, {
+                        isActive: nextStatus
+                    });
+                    showToast(`Staff "${s.full_name || s.staff_id}" ${nextStatus ? 'activated' : 'deactivated'}.`);
+                    await fetchInit();
+                    if (viewStaff && viewStaff.id === s.id) {
+                        setViewStaff(prev => ({ ...prev, is_active: nextStatus }));
+                    }
+                }
+                catch (err) {
+                    showToast(err.response?.data?.message ||
+                        err.message ||
+                        'Failed to update status.');
+                }
+            }
+        });
+    };
+
+    const handleDelete = (s) => {
+        const name = s.full_name || s.staff_id || 'this staff member';
+        requestConfirm({
+            title: 'Are you sure?',
+            message: `Are you sure you want to delete staff member "${name}"? This action cannot be undone.`,
+            confirmText: 'Yes, Delete',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    await deleteStaff(s.id);
+                    showToast('Staff deleted.');
+                    await fetchInit();
+                }
+                catch (err) {
+                    showToast(err.response?.data?.message ||
+                        err.message ||
+                        'Failed to delete staff.');
+                }
+            }
+        });
     };
     const openEdit = s => {
         setFieldErrors({});
@@ -351,6 +438,8 @@ export default function Staff() {
             dateOfJoining: s.date_of_joining
                 ? String(s.date_of_joining).split('T')[0]
                 : '',
+            expectedCheckIn: s.expected_check_in ? String(s.expected_check_in).slice(0, 5) : '09:00',
+            expectedCheckOut: s.expected_check_out ? String(s.expected_check_out).slice(0, 5) : '17:00',
             isActive: s.is_active !== undefined
                 ? Boolean(s.is_active)
                 : true
@@ -423,12 +512,21 @@ export default function Staff() {
             setAssigning(false);
         }
     };
-    const exportCSV = () => {
+    const handleExecuteExport = ({ fromDate, fromTime, toDate, toTime, preset }) => {
         try {
-            if (!staff.length) {
-                showToast('No rows to export. There are no staff records available.');
-                return;
+            if (!staff || !staff.length) {
+                return { error: 'No staff records available to export.' };
             }
+
+            const isDateFiltered = preset !== 'all' && (Boolean(fromDate) || Boolean(toDate));
+            const targetStaff = isDateFiltered
+                ? filterRecordsByDateRange(staff, { fromDate, fromTime, toDate, toTime })
+                : staff;
+
+            if (targetStaff.length === 0) {
+                return { error: 'No staff records found within the selected date & time range.' };
+            }
+
             const headers = [
                 'Staff ID',
                 'Username',
@@ -439,48 +537,43 @@ export default function Staff() {
                 'Designation',
                 'Branch',
                 'Assigned Classes',
+                'School Hours (In)',
+                'School Hours (Out)',
+                'Date of Joining',
                 'Phone',
                 'Email',
                 'Gender',
                 'Status'
             ];
-            const rows = staff.map(s => [
-                s.staff_id,
-                s.username,
-                s.first_name,
-                s.last_name,
-                s.full_name,
-                s.role_type,
-                s.designation,
-                s.branch_name,
-                s.assigned_classes,
-                s.phone,
-                s.email,
-                s.gender,
+            const rows = targetStaff.map(s => [
+                s.staff_id || '',
+                s.username || '',
+                s.first_name || '',
+                s.last_name || '',
+                s.full_name || '',
+                s.role_type || '',
+                s.designation || '',
+                s.branch_name || '',
+                s.assigned_classes || '',
+                s.expected_check_in ? String(s.expected_check_in).slice(0, 5) : '09:00',
+                s.expected_check_out ? String(s.expected_check_out).slice(0, 5) : '17:00',
+                s.date_of_joining ? String(s.date_of_joining).split('T')[0] : '',
+                s.phone || '',
+                s.email || '',
+                s.gender || '',
                 s.is_active ? 'Active' : 'Inactive'
             ]);
-            const csvContent = [
-                headers.map(csvEscape).join(','),
-                ...rows.map(row => row.map(csvEscape).join(','))
-            ].join('\r\n');
-            const blob = new Blob(['\uFEFF', csvContent], {
-                type: 'text/csv;charset=utf-8;'
-            });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `staff_list_${new Date()
-                .toISOString()
-                .slice(0, 10)}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
-            showToast('Staff CSV exported successfully.');
+
+            const filename = generateExportFilename('staff_list', { fromDate, toDate, preset });
+            downloadCSV(filename, headers, rows);
+
+            setShowExportModal(false);
+            showToast(`Staff CSV exported successfully (${targetStaff.length} rows).`);
+            return { success: true };
         }
         catch (error) {
             console.error('Staff CSV export failed:', error);
-            showToast('CSV export failed. Please try again.');
+            return { error: 'CSV export failed. Please try again.' };
         }
     };
     const downloadSampleCSV = () => {
@@ -528,21 +621,7 @@ export default function Staff() {
                 'Teacher@123'
             ]
         ];
-        const csvContent = [
-            headers.map(csvEscape).join(','),
-            ...sampleRows.map(row => row.map(csvEscape).join(','))
-        ].join('\r\n');
-        const blob = new Blob(['\uFEFF', csvContent], {
-            type: 'text/csv;charset=utf-8;'
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'sample_staff_import.csv';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
+        downloadCSV('sample_staff_import.csv', headers, sampleRows);
     };
     const handleFileUpload = (e) => {
         const file = e.target.files?.[0];
@@ -737,7 +816,7 @@ export default function Staff() {
         active: staff.filter(s => s.is_active).length
     };
     return (<Layout title="Staff" subtitle="Manage teaching, non-teaching, and management staff">
-      {toast && (<div className="alert alert-success">
+      {toast && (<div className="alert alert-success alert-toast">
           <MdCheckCircle style={{
                 verticalAlign: 'middle',
                 marginRight: 6
@@ -916,22 +995,24 @@ export default function Staff() {
             {' '}Sample CSV
           </button>
 
-        <button className="btn btn-secondary btn-sm" onClick={() => {
-            setImportError('');
-            setImportRows([]);
-            setImportFileName('');
-            setShowImportModal(true);
-        }} title="Import Staff from CSV" style={{
-            padding: '6px 10px',
-            fontSize: 12.5,
-            height: 36,
-            whiteSpace: 'nowrap'
-        }}>
-            <MdUpload size={14}/>
-            {' '}Import Staff
-          </button>
+        {!isReadOnly && (
+          <button className="btn btn-secondary btn-sm" onClick={() => {
+              setImportError('');
+              setImportRows([]);
+              setImportFileName('');
+              setShowImportModal(true);
+          }} title="Import Staff from CSV" style={{
+              padding: '6px 10px',
+              fontSize: 12.5,
+              height: 36,
+              whiteSpace: 'nowrap'
+          }}>
+              <MdUpload size={14}/>
+              {' '}Import Staff
+            </button>
+        )}
 
-          <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export CSV" style={{
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)} title="Export CSV with Custom Time Range" style={{
             padding: '6px 10px',
             fontSize: 12.5,
             height: 36,
@@ -941,6 +1022,7 @@ export default function Staff() {
             {' '}Export CSV
           </button>
 
+        {!isReadOnly && (
           <button className="btn btn-primary" onClick={openAdd} style={{
             padding: '6px 12px',
             fontSize: 12.5,
@@ -950,6 +1032,7 @@ export default function Staff() {
             <MdAdd size={16}/>
             {' '}Add Staff
           </button>
+        )}
         </div>
       </div>
 
@@ -966,6 +1049,7 @@ export default function Staff() {
                 <th>Role</th>
                 <th>Designation</th>
                 <th>Branch & Assigned Classes</th>
+                <th>School Hours</th>
                 <th>Contact</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -974,7 +1058,7 @@ export default function Staff() {
 
             <tbody>
               {filtered.length === 0 ? (<tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="empty-state">
                       <div className="empty-state-icon">
                         <MdPeople />
@@ -1068,6 +1152,24 @@ export default function Staff() {
                 })()}
                     </td>
 
+                    <td style={{ fontSize: 12 }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        padding: '4px 8px',
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        color: 'var(--text-main, #334155)',
+                        whiteSpace: 'nowrap'
+                      }} title="Expected School Hours">
+                        <MdAccessTime size={13} style={{ color: 'var(--primary, #4f46e5)' }} />
+                        {formatTime12(s.expected_check_in || '09:00')} – {formatTime12(s.expected_check_out || '17:00')}
+                      </span>
+                    </td>
+
                     <td style={{
                     fontSize: 13
                 }}>
@@ -1146,6 +1248,24 @@ export default function Staff() {
               </div>
 
               <div>
+                <strong>School Hours:</strong>{' '}
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: '#f1f5f9',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-main)'
+                }}>
+                  <MdAccessTime size={14} style={{ color: 'var(--primary, #4f46e5)' }} />
+                  {formatTime12(viewStaff.expected_check_in || '09:00')} – {formatTime12(viewStaff.expected_check_out || '17:00')}
+                </span>
+              </div>
+
+              <div>
                 <strong>Status:</strong>{' '}
                 {viewStaff.is_active
                 ? 'Active'
@@ -1157,40 +1277,46 @@ export default function Staff() {
                 display: 'grid',
                 gap: 10
             }}>
-              <button className="btn btn-secondary" onClick={() => {
-                setShowStaffViewModal(false);
-                openEdit(viewStaff);
-            }}>
-                <MdEdit /> Edit Staff
-              </button>
+              {!isReadOnly && (
+                <>
+                  <button className="btn btn-secondary" onClick={() => {
+                    setShowStaffViewModal(false);
+                    openEdit(viewStaff);
+                }}>
+                    <MdEdit /> Edit Staff
+                  </button>
 
-              <button className="btn btn-secondary" onClick={() => {
-                setShowStaffViewModal(false);
-                openClassModal(viewStaff);
-            }}>
-                <MdClass /> Staff Allocation
-              </button>
+                  <button className="btn btn-secondary" onClick={() => {
+                    setShowStaffViewModal(false);
+                    openClassModal(viewStaff);
+                }}>
+                    <MdClass /> Staff Allocation
+                  </button>
 
-              <button className="btn" onClick={() => handleToggleStatus(viewStaff)} style={{
-                background: viewStaff.is_active
-                    ? '#fef3c7'
-                    : '#dcfce7',
-                color: viewStaff.is_active
-                    ? '#d97706'
-                    : '#15803d'
-            }}>
-                <MdCancel />{' '}
-                {viewStaff.is_active
-                ? 'Deactivate Staff'
-                : 'Activate Staff'}
-              </button>
+                  <button className="btn" onClick={() => handleToggleStatus(viewStaff)} style={{
+                    background: viewStaff.is_active
+                        ? '#fef3c7'
+                        : '#dcfce7',
+                    color: viewStaff.is_active
+                        ? '#d97706'
+                        : '#15803d'
+                }}>
+                    <MdCancel />{' '}
+                    {viewStaff.is_active
+                    ? 'Deactivate Staff'
+                    : 'Activate Staff'}
+                  </button>
+                </>
+              )}
 
-              <button className="btn btn-danger" onClick={() => {
-                setShowStaffViewModal(false);
-                handleDelete(viewStaff);
-            }}>
-                <MdDelete /> Delete Staff
-              </button>
+              {canDelete && (
+                <button className="btn btn-danger" onClick={() => {
+                  setShowStaffViewModal(false);
+                  handleDelete(viewStaff);
+              }}>
+                  <MdDelete /> Delete Staff
+                </button>
+              )}
             </div>
           </div>)}
       </Modal>
@@ -1212,7 +1338,7 @@ export default function Staff() {
             <button type="submit" form="staff-edit-form" className="btn btn-primary" disabled={saving}>
               {saving
                 ? 'Saving...'
-                : 'Save Staff'}
+                : (editItem ? 'Save Staff' : 'Add Staff')}
             </button>
           </>}>
         <form id="staff-edit-form" onSubmit={handleSubmit}>
@@ -1587,6 +1713,46 @@ export default function Staff() {
             ...form,
             dateOfJoining: e.target.value
         })}/>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <MdAccessTime size={15} style={{ color: 'var(--primary, #4f46e5)' }} />
+                School Check-In Time (Arrival)
+              </label>
+              <input
+                className="input"
+                type="time"
+                value={form.expectedCheckIn || '09:00'}
+                onChange={e => setForm({
+                  ...form,
+                  expectedCheckIn: e.target.value
+                })}
+              />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Standard time staff should arrive at school (e.g. 09:00 AM)
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <MdAccessTime size={15} style={{ color: 'var(--primary, #4f46e5)' }} />
+                School Check-Out Time (Departure)
+              </label>
+              <input
+                className="input"
+                type="time"
+                value={form.expectedCheckOut || '17:00'}
+                onChange={e => setForm({
+                  ...form,
+                  expectedCheckOut: e.target.value
+                })}
+              />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Standard time staff should leave school (e.g. 05:00 PM)
+              </span>
             </div>
           </div>
 
@@ -2044,5 +2210,28 @@ export default function Staff() {
             </div>)}
         </div>
       </Modal>
+
+      {/* Export CSV Modal */}
+      <ExportCSVModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Staff Records"
+        isAttendance={false}
+        records={staff}
+        onExport={handleExecuteExport}
+      />
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>);
 }

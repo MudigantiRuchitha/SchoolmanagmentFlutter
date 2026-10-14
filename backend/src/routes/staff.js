@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // ============================================================
 // GET /api/staff
@@ -68,10 +68,12 @@ router.get('/', authMiddleware, async (req, res) => {
           )
           FROM classes c
           WHERE c.teacher_id = s.id
+            AND (c.is_deleted IS NOT TRUE)
         ) as assigned_classes
       FROM staff s
       LEFT JOIN branches b ON b.id = s.branch_id
       WHERE s.org_id = $1
+        AND (s.is_deleted IS NOT TRUE)
     `;
 
     const params = [req.admin.orgId];
@@ -249,7 +251,9 @@ router.post('/', authMiddleware, async (req, res) => {
       gender,
       dateOfJoining,
       username,
-      password
+      password,
+      expectedCheckIn,
+      expectedCheckOut
     } = req.body;
 
     // --------------------------------------------------------
@@ -405,6 +409,8 @@ if (existingStaff.rows.length > 0) {
     // --------------------------------------------------------
     // INSERT STAFF
     // --------------------------------------------------------
+    const expCheckIn = expectedCheckIn || req.body.expected_check_in || '09:00:00';
+    const expCheckOut = expectedCheckOut || req.body.expected_check_out || '17:00:00';
     
     const result = await pool.query(
       `
@@ -426,12 +432,14 @@ if (existingStaff.rows.length > 0) {
           user_type,
           latitude,
           longitude,
-          radius_in_meter
+          radius_in_meter,
+          expected_check_in,
+          expected_check_out
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9,
           $10, $11, $12, $13, $14, $15, $16,
-          $17, $18
+          $17, $18, $19, $20
         )
         RETURNING *
       `,
@@ -457,7 +465,9 @@ if (existingStaff.rows.length > 0) {
           : 'Staff',
         lat,
         lng,
-        radius
+        radius,
+        expCheckIn,
+        expCheckOut
       ]
     );
 
@@ -1101,7 +1111,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
       dateOfJoining,
       isActive,
       username,
-      password
+      password,
+      expectedCheckIn,
+      expectedCheckOut
     } = req.body;
 
     const staffMemberId = req.params.id;
@@ -1364,15 +1376,21 @@ router.put('/:id', authMiddleware, async (req, res) => {
             COALESCE($16, longitude),
 
           radius_in_meter =
-            COALESCE($17, radius_in_meter)
+            COALESCE($17, radius_in_meter),
 
-        WHERE id = $18
-          AND org_id = $19
+          expected_check_in =
+            COALESCE($18, expected_check_in),
+
+          expected_check_out =
+            COALESCE($19, expected_check_out)
+
+        WHERE id = $20
+          AND org_id = $21
 
           ${
             req.admin.branchAccess &&
             req.admin.branchAccess !== 'all'
-              ? ' AND branch_id = $20'
+              ? ' AND branch_id = $22'
               : ''
           }
 
@@ -1401,6 +1419,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
         lat || null,
         lng || null,
         radius || null,
+        expectedCheckIn !== undefined ? expectedCheckIn : (req.body.expected_check_in !== undefined ? req.body.expected_check_in : null),
+        expectedCheckOut !== undefined ? expectedCheckOut : (req.body.expected_check_out !== undefined ? req.body.expected_check_out : null),
         staffMemberId,
         orgId,
 
@@ -1584,6 +1604,7 @@ router.put(
 router.delete(
   '/:id',
   authMiddleware,
+  requireFullAdmin,
   async (req, res) => {
 
     try {
@@ -1609,7 +1630,8 @@ router.delete(
       // ------------------------------------------------------
       await pool.query(
         `
-          DELETE FROM staff
+          UPDATE staff
+          SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP
           WHERE id = $1
             AND org_id = $2
 

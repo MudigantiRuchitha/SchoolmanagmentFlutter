@@ -8,8 +8,8 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT ag.*, 
-        (SELECT COUNT(*) FROM classes WHERE academic_group_id = ag.id) as class_count
-       FROM academic_groups ag WHERE ag.org_id = $1 ORDER BY ag.name`,
+        (SELECT COUNT(*) FROM classes WHERE academic_group_id = ag.id AND (is_deleted IS NOT TRUE)) as class_count
+       FROM academic_groups ag WHERE ag.org_id = $1 AND (ag.is_deleted IS NOT TRUE) ORDER BY ag.name`,
       [req.admin.orgId]
     );
     res.json({ success: true, groups: result.rows });
@@ -52,7 +52,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // DELETE /api/academic-groups/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM academic_groups WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE academic_groups SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Academic group deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

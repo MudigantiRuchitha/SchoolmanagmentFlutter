@@ -77,11 +77,12 @@ router.get('/organisations', superAuthMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT o.*,
-        (SELECT COUNT(*) FROM admin_users WHERE org_id = o.id) as admin_count,
-        (SELECT COUNT(*) FROM branches WHERE org_id = o.id) as branch_count,
-        (SELECT COUNT(*) FROM students WHERE org_id = o.id) as student_count,
-        (SELECT COUNT(*) FROM staff WHERE org_id = o.id) as staff_count
+        (SELECT COUNT(*) FROM admin_users WHERE org_id = o.id AND (is_deleted IS NOT TRUE)) as admin_count,
+        (SELECT COUNT(*) FROM branches WHERE org_id = o.id AND (is_deleted IS NOT TRUE)) as branch_count,
+        (SELECT COUNT(*) FROM students WHERE org_id = o.id AND (is_deleted IS NOT TRUE)) as student_count,
+        (SELECT COUNT(*) FROM staff WHERE org_id = o.id AND (is_deleted IS NOT TRUE)) as staff_count
       FROM organisations o
+      WHERE (o.is_deleted IS NOT TRUE)
       ORDER BY o.created_at DESC
     `);
     res.json({ success: true, organisations: result.rows });
@@ -169,7 +170,7 @@ router.put('/organisations/:id', superAuthMiddleware, async (req, res) => {
 // DELETE /api/super-admin/organisations/:id
 router.delete('/organisations/:id', superAuthMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM organisations WHERE id = $1', [req.params.id]);
+    await pool.query('UPDATE organisations SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1', [req.params.id]);
     res.json({ success: true, message: 'Organisation deleted successfully.' });
   } catch (err) {
     console.error(err);
@@ -182,11 +183,11 @@ router.get('/stats', superAuthMiddleware, async (req, res) => {
   try {
     const stats = await pool.query(`
       SELECT
-        (SELECT COUNT(*) FROM organisations) as total_orgs,
-        (SELECT COUNT(*) FROM organisations WHERE is_active = true) as active_orgs,
-        (SELECT COUNT(*) FROM students) as total_students,
-        (SELECT COUNT(*) FROM staff) as total_staff,
-        (SELECT COUNT(*) FROM admin_users) as total_admins
+        (SELECT COUNT(*) FROM organisations WHERE (is_deleted IS NOT TRUE)) as total_orgs,
+        (SELECT COUNT(*) FROM organisations WHERE is_active = true AND (is_deleted IS NOT TRUE)) as active_orgs,
+        (SELECT COUNT(*) FROM students WHERE (is_deleted IS NOT TRUE)) as total_students,
+        (SELECT COUNT(*) FROM staff WHERE (is_deleted IS NOT TRUE)) as total_staff,
+        (SELECT COUNT(*) FROM admin_users WHERE (is_deleted IS NOT TRUE)) as total_admins
     `);
     res.json({ success: true, stats: stats.rows[0] });
   } catch (err) {

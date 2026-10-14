@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // GET /api/branches
 router.get('/', authMiddleware, async (req, res) => {
@@ -10,11 +10,11 @@ router.get('/', authMiddleware, async (req, res) => {
     const { status, search } = req.query;
     let query = `
       SELECT b.*, 
-        (SELECT COUNT(*) FROM students WHERE branch_id = b.id AND is_active = true) as student_count,
-        (SELECT COUNT(*) FROM staff WHERE branch_id = b.id AND is_active = true) as staff_count,
-        (SELECT COUNT(*) FROM classes WHERE branch_id = b.id AND is_active = true) as class_count
+        (SELECT COUNT(*) FROM students WHERE branch_id = b.id AND is_active = true AND (is_deleted IS NOT TRUE)) as student_count,
+        (SELECT COUNT(*) FROM staff WHERE branch_id = b.id AND is_active = true AND (is_deleted IS NOT TRUE)) as staff_count,
+        (SELECT COUNT(*) FROM classes WHERE branch_id = b.id AND is_active = true AND (is_deleted IS NOT TRUE)) as class_count
        FROM branches b 
-       WHERE b.org_id = $1
+       WHERE b.org_id = $1 AND (b.is_deleted IS NOT TRUE)
     `;
     const params = [req.admin.orgId];
 
@@ -48,16 +48,16 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/:id/details', authMiddleware, async (req, res) => {
   try {
     const branchRes = await pool.query(
-      `SELECT * FROM branches WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $3' : ''}`,
+      `SELECT * FROM branches WHERE id = $1 AND org_id = $2 AND (is_deleted IS NOT TRUE)${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $3' : ''}`,
       req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
     );
     if (branchRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Branch not found.' });
 
     const [classesRes, staffRes, studentsRes, adminsRes] = await Promise.all([
-      pool.query('SELECT c.*, ag.name as academic_group_name FROM classes c LEFT JOIN academic_groups ag ON ag.id = c.academic_group_id WHERE c.branch_id = $1 AND c.org_id = $2 ORDER BY c.name', [req.params.id, req.admin.orgId]),
-      pool.query('SELECT id, staff_id, full_name, role_type, designation, phone, email, is_active FROM staff WHERE branch_id = $1 AND org_id = $2 ORDER BY full_name', [req.params.id, req.admin.orgId]),
-      pool.query('SELECT s.id, s.admission_no, s.roll_no, s.full_name, c.name as class_name, c.section, s.parent_name, s.phone FROM students s LEFT JOIN classes c ON c.id = s.class_id WHERE s.branch_id = $1 AND s.org_id = $2 ORDER BY s.full_name LIMIT 50', [req.params.id, req.admin.orgId]),
-      pool.query("SELECT id, username, full_name, email, role, is_active FROM admin_users WHERE org_id = $1 AND (branch_access = $2 OR branch_access = 'all')", [req.admin.orgId, req.params.id.toString()]),
+      pool.query('SELECT c.*, ag.name as academic_group_name FROM classes c LEFT JOIN academic_groups ag ON ag.id = c.academic_group_id WHERE c.branch_id = $1 AND c.org_id = $2 AND (c.is_deleted IS NOT TRUE) ORDER BY c.name', [req.params.id, req.admin.orgId]),
+      pool.query('SELECT id, staff_id, full_name, role_type, designation, phone, email, is_active FROM staff WHERE branch_id = $1 AND org_id = $2 AND (is_deleted IS NOT TRUE) ORDER BY full_name', [req.params.id, req.admin.orgId]),
+      pool.query('SELECT s.id, s.admission_no, s.roll_no, s.full_name, c.name as class_name, c.section, s.parent_name, s.phone FROM students s LEFT JOIN classes c ON c.id = s.class_id WHERE s.branch_id = $1 AND s.org_id = $2 AND (s.is_deleted IS NOT TRUE) ORDER BY s.full_name LIMIT 50', [req.params.id, req.admin.orgId]),
+      pool.query("SELECT id, username, full_name, email, role, is_active FROM admin_users WHERE org_id = $1 AND (is_deleted IS NOT TRUE) AND (branch_access = $2 OR branch_access = 'all')", [req.admin.orgId, req.params.id.toString()]),
     ]);
 
     res.json({
@@ -75,7 +75,7 @@ router.get('/:id/details', authMiddleware, async (req, res) => {
 });
 
 // POST /api/branches
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     if (req.admin.branchAccess !== 'all') {
       return res.status(403).json({ success: false, message: 'Dedicated branch users cannot create another branch.' });
@@ -137,7 +137,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // PUT /api/branches/:id
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     const { name, code, contactPerson, phone, email, address, latitude, longitude, geofenceRadius, isActive } = req.body;
     if (!name || !code || !contactPerson || !phone || !email) {
@@ -175,10 +175,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/branches/:id
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     await pool.query(
-      `DELETE FROM branches WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $3' : ''}`,
+      `UPDATE branches SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND id = $3' : ''}`,
       req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.params.id, req.admin.orgId, req.admin.branchAccess] : [req.params.id, req.admin.orgId]
     );
     res.json({ success: true, message: 'Branch deleted.' });

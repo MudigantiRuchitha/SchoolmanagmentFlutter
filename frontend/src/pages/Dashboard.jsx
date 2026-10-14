@@ -808,27 +808,25 @@ export default function Dashboard() {
 
 
                         <td>
-
-                          <span
-                            className={
-                              `dashboard-status ${
-                                !record.status ||
-                                record.status === 'absent'
-                                  ? 'absent'
-                                  : record.status === 'present'
-                                    ? 'present'
-                                    : record.status === 'late'
-                                      ? 'late'
-                                      : 'other'
-                              }`
-                            }
-                          >
-
-                            {record.status ||
-                              'Absent'}
-
-                          </span>
-
+                          {record.status ? (
+                            <span
+                              className={
+                                `dashboard-status ${
+                                  record.status === 'absent'
+                                    ? 'absent'
+                                    : record.status === 'present'
+                                      ? 'present'
+                                      : record.status === 'late'
+                                        ? 'late'
+                                        : 'other'
+                                }`
+                              }
+                            >
+                              {record.status}
+                            </span>
+                          ) : (
+                            ''
+                          )}
                         </td>
 
                       </tr>

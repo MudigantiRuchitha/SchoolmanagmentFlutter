@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
+import { useAuth } from '../context/AuthContext';
 import {
   getClasses,
   createClass,
@@ -8,7 +10,8 @@ import {
   deleteClass,
   getAcademicGroups,
   getBranches,
-  getStaff
+  getStaff,
+  getAcademicYears
 } from '../api';
 
 import {
@@ -26,6 +29,19 @@ import { filterBranches, filterBranchItems, getBranchScope, isDedicatedBranchUse
 
 
 // ============================================================
+// DEFAULT ACADEMIC YEARS
+// ============================================================
+
+const DEFAULT_ACADEMIC_YEARS = [
+  '2026-2027',
+  '2025-2026',
+  '2024-2025',
+  '2027-2028',
+  '2028-2029'
+];
+
+
+// ============================================================
 // EMPTY FORM
 // ============================================================
 
@@ -34,6 +50,7 @@ const emptyForm = {
   section: '',
   academicGroupId: '',
   branchId: '',
+  academicYear: '2026-2027',
   teacherId: '',
   isActive: true
 };
@@ -75,6 +92,7 @@ const DEFAULT_SECTION_OPTIONS = [
 
 
 export default function Classes() {
+  const { isReadOnly, canDelete } = useAuth();
 
   // ==========================================================
   // MAIN DATA
@@ -103,6 +121,10 @@ export default function Classes() {
   // Filters
   const [filterGroup, setFilterGroup] = useState('');
   const [filterBranch, setFilterBranch] = useState(getBranchScope);
+  const [filterAcademicYear, setFilterAcademicYear] = useState('');
+
+  // Academic Years list for dropdown
+  const [academicYears, setAcademicYears] = useState(DEFAULT_ACADEMIC_YEARS);
 
 
   // ==========================================================
@@ -152,6 +174,37 @@ export default function Classes() {
 
   const [toast, setToast] = useState(null);
 
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
+
 
   const showToast = (msg, type = 'success') => {
     setToast({
@@ -184,11 +237,12 @@ export default function Classes() {
 
     try {
 
-      const [c, g, b, s] = await Promise.all([
+      const [c, g, b, s, y] = await Promise.all([
         getClasses(),
         getAcademicGroups(),
         getBranches(),
-        getStaff()
+        getStaff(),
+        getAcademicYears().catch(() => ({ data: { academicYears: [] } }))
       ]);
 
 
@@ -327,6 +381,12 @@ export default function Classes() {
 
       setStaff(s.data.staff || []);
 
+      const dbYears = (y?.data?.academicYears && Array.isArray(y.data.academicYears))
+        ? y.data.academicYears
+        : [];
+      const combinedYears = Array.from(new Set([...dbYears, ...DEFAULT_ACADEMIC_YEARS]));
+      setAcademicYears(combinedYears);
+
 
     } catch (error) {
 
@@ -357,6 +417,10 @@ export default function Classes() {
       params.branch_id = filterBranch;
     }
 
+    if (filterAcademicYear) {
+      params.academic_year = filterAcademicYear;
+    }
+
 
     try {
 
@@ -381,7 +445,7 @@ export default function Classes() {
 
     fetchClasses();
 
-  }, [filterGroup, filterBranch]);
+  }, [filterGroup, filterBranch, filterAcademicYear]);
 
 
   const normalizeString = (str) => {
@@ -390,11 +454,12 @@ export default function Classes() {
       .replace(/[^a-z0-9]/g, '');
   };
 
-  const isSectionExistingForClass = (className, sectionName, excludeId = null, branchId = null) => {
+  const isSectionExistingForClass = (className, sectionName, excludeId = null, branchId = null, academicYear = null) => {
     if (!className || !sectionName) return false;
     const cNameNorm = normalizeString(className);
     const sNameNorm = normalizeString(sectionName);
     const targetBranch = branchId ? Number(branchId) : null;
+    const targetYear = (academicYear || '').trim();
     const poolToCheck = allClasses.length > 0 ? allClasses : classes;
 
     return poolToCheck.some(c => {
@@ -407,6 +472,10 @@ export default function Classes() {
       const cBranch = c.branch_id ? Number(c.branch_id) : null;
       const sameBranch = targetBranch === null || cBranch === null || targetBranch === cBranch;
       if (!sameBranch) return false;
+
+      if (targetYear && c.academic_year) {
+        if (targetYear !== c.academic_year.trim()) return false;
+      }
 
       if (rawName === cNameNorm) return true;
 
@@ -454,49 +523,29 @@ export default function Classes() {
   };
 
 
-  // ==========================================================
-  // SUBMIT ADD / EDIT CLASS
-  // ==========================================================
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setFormError('');
-
-    const trimmedName = (form.name || '').trim();
-    const trimmedSection = (form.section || '').trim();
-
-    if (!trimmedName) {
-      setFormError('Class Name is required!');
-      showToast('Class Name is required!', 'error');
-      return;
-    }
-
-    if (!trimmedSection) {
-      setFormError('Section is required!');
-      showToast('Section is required!', 'error');
-      return;
-    }
-
-    // Duplicate validation
-    if (isSectionExistingForClass(trimmedName, trimmedSection, editItem?.id, form.branchId)) {
-      const errMsg = `Class "${trimmedName}" with section "${trimmedSection}" already exists.`;
-      setFormError(errMsg);
-      showToast(errMsg, 'error');
-      return;
-    }
-
+  const executeSave = async () => {
     const editingClass = editItem;
     setSaving(true);
 
     try {
+      const payload = {
+        name: form.name.trim(),
+        section: form.section.trim(),
+        academicGroupId: form.academicGroupId || null,
+        branchId: form.branchId,
+        academicYear: (form.academicYear || '').trim(),
+        teacherId: form.teacherId || null,
+        isActive: form.isActive
+      };
+
       if (editItem) {
         await updateClass(
           editItem.id,
-          form
+          payload
         );
         showToast('Class updated!');
       } else {
-        await createClass(form);
+        await createClass(payload);
         showToast('Class created!');
       }
 
@@ -508,11 +557,15 @@ export default function Classes() {
       await fetchInit();
 
       if (editingClass) {
+        const branchObj = branches.find(b => String(b.id) === String(form.branchId));
         const updatedClass = {
           ...editingClass,
-          name: form.name,
-          class_name: form.name,
-          section: form.section,
+          name: form.name.trim(),
+          class_name: form.name.trim(),
+          section: form.section.trim(),
+          branch_id: form.branchId ? Number(form.branchId) : editingClass.branch_id,
+          branch_name: branchObj ? branchObj.name : editingClass.branch_name,
+          academic_year: (form.academicYear || '').trim(),
           is_active: form.isActive
         };
         returnToClassView(updatedClass);
@@ -529,6 +582,73 @@ export default function Classes() {
     }
 
     setSaving(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    setFormError('');
+
+    const trimmedName = (form.name || '').trim();
+    const trimmedSection = (form.section || '').trim();
+    const branchIdVal = form.branchId;
+    const academicYearVal = (form.academicYear || '').trim();
+
+    if (!trimmedName) {
+      setFormError('Class Name is required!');
+      showToast('Class Name is required!', 'error');
+      return;
+    }
+
+    if (!trimmedSection) {
+      setFormError('Section is required!');
+      showToast('Section is required!', 'error');
+      return;
+    }
+
+    if (!branchIdVal) {
+      setFormError('Branch is required!');
+      showToast('Branch is required!', 'error');
+      return;
+    }
+
+    if (!academicYearVal) {
+      setFormError('Academic Year is required!');
+      showToast('Academic Year is required!', 'error');
+      return;
+    }
+
+    if (!form.teacherId) {
+      setFormError('Assigned Staff is required!');
+      showToast('Assigned Staff is required!', 'error');
+      return;
+    }
+
+    // Duplicate validation
+    if (isSectionExistingForClass(trimmedName, trimmedSection, editItem?.id, branchIdVal, academicYearVal)) {
+      const errMsg = `Class "${trimmedName}" with section "${trimmedSection}" already exists in this branch and academic year.`;
+      setFormError(errMsg);
+      showToast(errMsg, 'error');
+      return;
+    }
+
+    if (!editItem) {
+      const branchObj = branches.find(b => String(b.id) === String(branchIdVal));
+      const branchLabel = branchObj ? ` (${branchObj.name})` : '';
+      const staffObj = staff.find(s => String(s.id) === String(form.teacherId));
+      const staffLabel = staffObj ? `, Staff: ${staffObj.full_name}` : '';
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to add new class "${trimmedName}" (${trimmedSection})${branchLabel} for academic year ${academicYearVal}${staffLabel}?`,
+        confirmText: 'Yes, Add Class',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+
+    await executeSave();
   };
 
 
@@ -572,11 +692,16 @@ export default function Classes() {
   const openEditClass = (c) => {
     setEditItem(c);
     setFormError('');
+    const yr = c.academic_year || '2026-2027';
+    if (yr && !academicYears.includes(yr)) {
+      setAcademicYears(prev => [yr, ...prev]);
+    }
     setForm({
       name: c.class_name || c.name || '',
       section: c.section || '',
       academicGroupId: c.academic_group_id || '',
-      branchId: c.branch_id || '',
+      branchId: c.branch_id ? String(c.branch_id) : (getBranchScope() || ''),
+      academicYear: yr,
       teacherId: c.teacher_id || '',
       isActive: c.is_active !== undefined ? c.is_active : true
     });
@@ -638,6 +763,10 @@ export default function Classes() {
       return;
     }
 
+    if (!selectedTeacherIds || selectedTeacherIds.length === 0) {
+      showToast('Please select at least one staff member.', 'error');
+      return;
+    }
 
     const assignedClass = selectedClass;
     setAssigning(true);
@@ -693,48 +822,49 @@ export default function Classes() {
   // TOGGLE CLASS STATUS
   // ==========================================================
 
-  const handleToggleStatus = async (c) => {
+  const handleToggleStatus = (c) => {
+    const nextStatus = !c.is_active;
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to ${nextStatus ? 'activate' : 'deactivate'} class "${c.name}"?`,
+      confirmText: nextStatus ? 'Yes, Activate' : 'Yes, Deactivate',
+      type: nextStatus ? 'success' : 'warning',
+      onConfirm: async () => {
+        try {
+          await updateClass(
+            c.id,
+            {
+              isActive: nextStatus
+            }
+          );
 
-    try {
+          showToast(
+            `Class "${c.name}" ${
+              nextStatus
+                ? 'activated'
+                : 'deactivated'
+            }.`
+          );
 
-      await updateClass(
-        c.id,
-        {
-          isActive: !c.is_active
+          await fetchInit();
+
+          returnToClassView({
+            ...c,
+            is_active: nextStatus
+          });
+        } catch (error) {
+          console.error(
+            'Failed to update status:',
+            error
+          );
+
+          showToast(
+            'Failed to update class status.',
+            'error'
+          );
         }
-      );
-
-
-      showToast(
-        `Class "${c.name}" ${
-          !c.is_active
-            ? 'activated'
-            : 'deactivated'
-        }.`
-      );
-
-
-      await fetchInit();
-
-      returnToClassView({
-        ...c,
-        is_active: !c.is_active
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        'Failed to update status:',
-        error
-      );
-
-
-      showToast(
-        'Failed to update class status.'
-      );
-
-    }
+      }
+    });
   };
 
 
@@ -742,39 +872,29 @@ export default function Classes() {
   // DELETE CLASS
   // ==========================================================
 
-  const handleDelete = async (c) => {
-
-    if (
-      !confirm(
-        `Delete class "${c.name}"?`
-      )
-    ) {
-      return;
-    }
-
-
-    try {
-
-      await deleteClass(c.id);
-
-      showToast('Class deleted.');
-
-      await fetchInit();
-
-
-    } catch (error) {
-
-      console.error(
-        'Failed to delete class:',
-        error
-      );
-
-
-      showToast(
-        'Failed to delete class.'
-      );
-
-    }
+  const handleDelete = (c) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to delete class "${c.name}"? This action cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteClass(c.id);
+          showToast('Class deleted.');
+          await fetchInit();
+        } catch (error) {
+          console.error(
+            'Failed to delete class:',
+            error
+          );
+          showToast(
+            'Failed to delete class.',
+            'error'
+          );
+        }
+      }
+    });
   };
 
 
@@ -782,21 +902,18 @@ export default function Classes() {
   // FILTER SEARCH
   // ==========================================================
 
-  const filtered = classes.filter(c =>
+  const filtered = classes.filter(c => {
+    if (filterAcademicYear && c.academic_year && c.academic_year !== filterAcademicYear) {
+      return false;
+    }
 
-    !search ||
-
-    `${c.name} ${
-      c.section
-    } ${
-      c.teacher_name || ''
-    }`
-      .toLowerCase()
-      .includes(
-        search.toLowerCase()
-      )
-
-  );
+    return (
+      !search ||
+      `${c.name} ${c.section} ${c.branch_name || ''} ${c.academic_year || ''} ${c.teacher_name || ''}`
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    );
+  });
 
 
   // ==========================================================
@@ -924,6 +1041,39 @@ export default function Classes() {
           </select>
 
 
+          {/* ACADEMIC YEAR FILTER */}
+
+          <select
+            className="input"
+            style={{
+              width: 160,
+              padding: '9px 10px',
+              fontSize: 13
+            }}
+            value={filterAcademicYear}
+            onChange={(e) =>
+              setFilterAcademicYear(e.target.value)
+            }
+          >
+
+            <option value="">
+              All Academic Years
+            </option>
+
+            {academicYears.map(yr => (
+
+              <option
+                key={yr}
+                value={yr}
+              >
+                {yr}
+              </option>
+
+            ))}
+
+          </select>
+
+
           <span
             style={{
               fontSize: 13,
@@ -937,23 +1087,24 @@ export default function Classes() {
 
 
         {/* ADD CLASS */}
-
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setForm(emptyForm);
-            setEditItem(null);
-            setFormError('');
-            setShowModal(true);
-          }}
-        >
-
-          <MdAdd />
-
-          Add Class
-
-        </button>
-
+        {!isReadOnly && (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setForm({
+                ...emptyForm,
+                branchId: getBranchScope() || (branches.length === 1 ? String(branches[0].id) : ''),
+                academicYear: academicYears[0] || '2026-2027'
+              });
+              setEditItem(null);
+              setFormError('');
+              setShowModal(true);
+            }}
+          >
+            <MdAdd />
+            Add Class
+          </button>
+        )}
       </div>
 
 
@@ -989,6 +1140,8 @@ export default function Classes() {
 
                 <th>Branch</th>
 
+                <th>Academic Year</th>
+
                 <th>Assigned Staff</th>
 
                 <th>Enrolled Students</th>
@@ -1008,7 +1161,7 @@ export default function Classes() {
 
                 <tr>
 
-                  <td colSpan={8}>
+                  <td colSpan={9}>
 
                     <div className="empty-state">
 
@@ -1085,6 +1238,23 @@ export default function Classes() {
                     >
 
                       {c.branch_name || '—'}
+
+                    </td>
+
+
+                    {/* ACADEMIC YEAR */}
+
+                    <td
+                      style={{
+                        fontSize: 13
+                      }}
+                    >
+
+                      <span className="badge badge-gray" style={{ fontSize: 12 }}>
+
+                        {c.academic_year || '2026-2027'}
+
+                      </span>
 
                     </td>
 
@@ -1250,26 +1420,33 @@ export default function Classes() {
               <div><strong>Class:</strong> {viewClass.name || viewClass.class_name || '—'}</div>
               <div><strong>Section:</strong> {viewClass.section || '—'}</div>
               <div><strong>Branch:</strong> {viewClass.branch_name || '—'}</div>
+              <div><strong>Academic Year:</strong> {viewClass.academic_year || '2026-2027'}</div>
               <div><strong>Status:</strong> {viewClass.is_active ? 'Active' : 'Inactive'}</div>
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
-              <button className="btn btn-secondary" onClick={() => openEditClass(viewClass)}>
-                <MdEdit /> Edit Class
-              </button>
-              <button className="btn btn-secondary" onClick={() => { setShowClassViewModal(false); openAssignStaffModal(viewClass); }}>
-                <MdPerson /> Staff Allocation
-              </button>
-              <button
-                className="btn"
-                onClick={() => handleToggleStatus(viewClass)}
-                style={{ background: viewClass.is_active ? '#fef3c7' : '#dcfce7', color: viewClass.is_active ? '#d97706' : '#15803d' }}
-              >
-                {viewClass.is_active ? <MdCancel /> : <MdCheckCircle />}
-                {viewClass.is_active ? 'Mark Inactive' : 'Mark Active'}
-              </button>
-              <button className="btn btn-danger" onClick={() => { setShowClassViewModal(false); handleDelete(viewClass); }}>
-                <MdDelete /> Delete Class
-              </button>
+              {!isReadOnly && (
+                <>
+                  <button className="btn btn-secondary" onClick={() => openEditClass(viewClass)}>
+                    <MdEdit /> Edit Class
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => { setShowClassViewModal(false); openAssignStaffModal(viewClass); }}>
+                    <MdPerson /> Staff Allocation
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => handleToggleStatus(viewClass)}
+                    style={{ background: viewClass.is_active ? '#fef3c7' : '#dcfce7', color: viewClass.is_active ? '#d97706' : '#15803d' }}
+                  >
+                    {viewClass.is_active ? <MdCancel /> : <MdCheckCircle />}
+                    {viewClass.is_active ? 'Mark Inactive' : 'Mark Active'}
+                  </button>
+                </>
+              )}
+              {canDelete && (
+                <button className="btn btn-danger" onClick={() => { setShowClassViewModal(false); handleDelete(viewClass); }}>
+                  <MdDelete /> Delete Class
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1311,7 +1488,7 @@ export default function Classes() {
 
               {saving
                 ? 'Saving...'
-                : 'Save Class'}
+                : (editItem ? 'Save Class' : 'Add Class')}
 
             </button>
 
@@ -1391,181 +1568,144 @@ export default function Classes() {
 
 
           {/* =================================================
-              ACADEMIC GROUP + BRANCH
+              BRANCH + ACADEMIC YEAR (MANDATORY)
           ================================================== */}
 
           <div className="form-row">
 
-
-            {/* ACADEMIC GROUP */}
-
-            <div className="form-group">
-
-              <label>
-                Academic Group
-              </label>
-
-
-              <select
-
-                className="input"
-
-                value={
-                  form.academicGroupId
-                }
-
-                onChange={(e) => {
-
-                  setForm({
-
-                    ...form,
-
-                    academicGroupId:
-                      e.target.value
-
-                  });
-
-                }}
-
-              >
-
-                <option value="">
-                  Select Academic Group
-                </option>
-
-
-                {groups.map(g => (
-
-                  <option
-                    key={g.id}
-                    value={g.id}
-                  >
-
-                    {g.name}
-
-                  </option>
-
-                ))}
-
-              </select>
-
-            </div>
-
-
             {/* BRANCH */}
-
             <div className="form-group">
-
               <label>
-                Branch
+                Branch <span style={{ color: 'var(--danger, #ef4444)' }}>*</span>
               </label>
-
-
               <select
-
                 className="input"
-
-                value={
-                  form.branchId
-                }
-
+                value={form.branchId}
                 onChange={(e) => {
-
+                  if (formError) setFormError('');
                   setForm({
-
                     ...form,
-
-                    branchId:
-                      e.target.value
-
+                    branchId: e.target.value
                   });
-
                 }}
-
+                required
               >
-
                 <option value="">
                   Select Branch
                 </option>
-
-
                 {branches.map(b => (
-
                   <option
                     key={b.id}
                     value={b.id}
                   >
-
                     {b.name}
-
                   </option>
-
                 ))}
-
               </select>
+            </div>
 
+            {/* ACADEMIC YEAR */}
+            <div className="form-group">
+              <label>
+                Academic Year <span style={{ color: 'var(--danger, #ef4444)' }}>*</span>
+              </label>
+              <select
+                className="input"
+                value={form.academicYear}
+                onChange={(e) => {
+                  if (formError) setFormError('');
+                  setForm({
+                    ...form,
+                    academicYear: e.target.value
+                  });
+                }}
+                required
+              >
+                <option value="">
+                  Select Academic Year
+                </option>
+                {academicYears.map(yr => (
+                  <option
+                    key={yr}
+                    value={yr}
+                  >
+                    {yr}
+                  </option>
+                ))}
+              </select>
             </div>
 
           </div>
 
 
           {/* =================================================
-              STAFF
+              ACADEMIC GROUP + ASSIGNED STAFF (OPTIONAL)
           ================================================== */}
 
-          <div className="form-group">
+          <div className="form-row">
 
-            <label>
-              Assigned Staff
-            </label>
-
-
-            <select
-
-              className="input"
-
-              value={
-                form.teacherId
-              }
-
-              onChange={(e) => {
-
-                setForm({
-
-                  ...form,
-
-                  teacherId:
-                    e.target.value
-
-                });
-
-              }}
-
-            >
-
-              <option value="">
-                No staff assigned
-              </option>
-
-
-              {staff.map(st => (
-
-                <option
-                  key={st.id}
-                  value={st.id}
-                >
-
-                  {st.full_name}
-
-                  {st.staff_id
-                    ? ` (${st.staff_id})`
-                    : ''}
-
+            {/* ACADEMIC GROUP */}
+            <div className="form-group">
+              <label>
+                Academic Group
+              </label>
+              <select
+                className="input"
+                value={form.academicGroupId}
+                onChange={(e) => {
+                  setForm({
+                    ...form,
+                    academicGroupId: e.target.value
+                  });
+                }}
+              >
+                <option value="">
+                  Select Academic Group (Optional)
                 </option>
+                {groups.map(g => (
+                  <option
+                    key={g.id}
+                    value={g.id}
+                  >
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              ))}
-
-            </select>
+            {/* ASSIGNED STAFF */}
+            <div className="form-group">
+              <label>
+                Assigned Staff <span style={{ color: 'var(--danger, #ef4444)' }}>*</span>
+              </label>
+              <select
+                className="input"
+                value={form.teacherId}
+                onChange={(e) => {
+                  if (formError) setFormError('');
+                  setForm({
+                    ...form,
+                    teacherId: e.target.value
+                  });
+                }}
+                required
+              >
+                <option value="">
+                  Select Staff
+                </option>
+                {staff.map(st => (
+                  <option
+                    key={st.id}
+                    value={st.id}
+                  >
+                    {st.full_name}
+                    {st.staff_id
+                      ? ` (${st.staff_id})`
+                      : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
 
           </div>
 
@@ -2215,10 +2355,20 @@ export default function Classes() {
           )}
 
         </div>
-
       </Modal>
 
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
-
   );
 }

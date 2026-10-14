@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
+import ExportCSVModal from '../components/ExportCSVModal';
 import { useAuth } from '../context/AuthContext';
 import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 import ClassSectionSelect from '../components/ClassSectionSelect';
@@ -9,6 +11,7 @@ import {
   MdAdd, MdEdit, MdDelete, MdSearch, MdPersonAdd, MdDownload, MdUpload,
   MdCheckCircle, MdCancel, MdVisibility, MdPeople, MdPerson, MdFilePresent, MdWarning 
 } from 'react-icons/md';
+import { downloadCSV, filterRecordsByDateRange, generateExportFilename } from '../utils/csvExport';
 
 const emptyForm = { 
   admissionNo: '', rollNo: '', firstName: '', lastName: '', fullName: '', 
@@ -17,7 +20,7 @@ const emptyForm = {
 };
 
 export default function Students() {
-  const { user } = useAuth();
+  const { user, isReadOnly, canDelete } = useAuth();
   const [students, setStudents] = useState([]);
   const [branches, setBranches] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -26,6 +29,7 @@ export default function Students() {
   const [filterBranch, setFilterBranch] = useState(getBranchScope);
   const [filterClass, setFilterClass] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
   
   // Student Profile & Edit Modal
   const [showModal, setShowModal] = useState(false);
@@ -49,6 +53,37 @@ export default function Students() {
   const [importing, setImporting] = useState(false);
   const [importFileName, setImportFileName] = useState('');
   const fileInputRef = useRef(null);
+
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
 
   const [toast, setToast] = useState('');
   const [importError, setImportError] = useState('');
@@ -97,32 +132,63 @@ export default function Students() {
 
   const validateForm = () => {
     const errors = {};
-    if (!form.firstName?.trim()) errors.firstName = 'First name is required';
-    if (!form.lastName?.trim()) errors.lastName = 'Last name is required';
-    if (!form.admissionNo?.trim()) errors.admissionNo = 'Admission number is required';
-    if (!form.rollNo?.trim()) errors.rollNo = 'Roll number is required';
-    
-    if (form.phone) {
-      let cleaned = form.phone.replace(/[^0-9]/g, '');
-      if (cleaned.length > 10 && cleaned.startsWith('91')) cleaned = cleaned.slice(2);
-      if (cleaned.length !== 10) errors.phone = 'Phone number must be exactly 10 digits';
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+    const digitOnlyRegex = /^[0-9]+$/;
+
+    // Name: char restriction (letters and spaces only)
+    if (!form.firstName?.trim()) {
+      errors.firstName = 'First name is required';
+    } else if (!nameRegex.test(form.firstName.trim())) {
+      errors.firstName = 'First name must contain only alphabets (characters)';
     }
 
-    if (form.parentPhone) {
-      let cleanedP = form.parentPhone.replace(/[^0-9]/g, '');
-      if (cleanedP.length > 10 && cleanedP.startsWith('91')) cleanedP = cleanedP.slice(2);
-      if (cleanedP.length !== 10) errors.parentPhone = 'Parent phone must be exactly 10 digits';
+    if (!form.lastName?.trim()) {
+      errors.lastName = 'Last name is required';
+    } else if (!nameRegex.test(form.lastName.trim())) {
+      errors.lastName = 'Last name must contain only alphabets (characters)';
+    }
+
+    if (form.parentName?.trim() && !nameRegex.test(form.parentName.trim())) {
+      errors.parentName = 'Parent name must contain only alphabets (characters)';
+    }
+
+    // Admission No: char + int (alphanumeric only)
+    if (!form.admissionNo?.trim()) {
+      errors.admissionNo = 'Admission number is required';
+    } else if (!alphanumericRegex.test(form.admissionNo.trim())) {
+      errors.admissionNo = 'Admission number must contain only letters and numbers (char + int)';
+    }
+
+    // Roll No: char + int (alphanumeric only)
+    if (!form.rollNo?.trim()) {
+      errors.rollNo = 'Roll number is required';
+    } else if (!alphanumericRegex.test(form.rollNo.trim())) {
+      errors.rollNo = 'Roll number must contain only letters and numbers (char + int)';
+    }
+    
+    // Mobile numbers: int only (numbers only, exactly 10 digits)
+    if (form.phone?.trim()) {
+      if (!digitOnlyRegex.test(form.phone.trim())) {
+        errors.phone = 'Mobile number must contain integers only (numbers)';
+      } else if (form.phone.trim().length !== 10) {
+        errors.phone = 'Mobile number must be exactly 10 digits';
+      }
+    }
+
+    if (form.parentPhone?.trim()) {
+      if (!digitOnlyRegex.test(form.parentPhone.trim())) {
+        errors.parentPhone = 'Parent mobile number must contain integers only (numbers)';
+      } else if (form.parentPhone.trim().length !== 10) {
+        errors.parentPhone = 'Parent mobile number must be exactly 10 digits';
+      }
     }
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-
-    if (!validateForm()) return;
-
+  const executeSave = async () => {
     let cleanedPhone = form.phone ? form.phone.replace(/[^0-9]/g, '') : '';
     if (cleanedPhone.length > 10 && cleanedPhone.startsWith('91')) cleanedPhone = cleanedPhone.slice(2);
 
@@ -166,19 +232,65 @@ export default function Students() {
     setSaving(false);
   };
 
-  const handleToggleStatus = async (s) => {
-    try {
-      await updateStudent(s.id, { isActive: !s.is_active });
-      showToast(`Student "${s.full_name}" ${!s.is_active ? 'activated' : 'deactivated'}.`);
-      fetchInit();
-    } catch {
-      showToast('Failed to update student status.');
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!validateForm()) return;
+
+    if (!editItem) {
+      const computedFull = `${form.firstName || ''} ${form.lastName || ''}`.trim() || form.fullName || 'this student';
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to add new student "${computedFull}"?`,
+        confirmText: 'Yes, Add Student',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
     }
+
+    await executeSave();
   };
 
-  const handleDelete = async (s) => {
-    if (!confirm(`Are you sure you want to delete student "${s.full_name}"?`)) return;
-    try { await deleteStudent(s.id); showToast('Student deleted.'); fetchInit(); } catch { showToast('Failed to delete student.'); }
+  const handleToggleStatus = (s) => {
+    const nextStatus = !s.is_active;
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to ${nextStatus ? 'activate' : 'deactivate'} student "${s.full_name}"?`,
+      confirmText: nextStatus ? 'Yes, Activate' : 'Yes, Deactivate',
+      type: nextStatus ? 'success' : 'warning',
+      onConfirm: async () => {
+        try {
+          await updateStudent(s.id, { isActive: nextStatus });
+          showToast(`Student "${s.full_name}" ${nextStatus ? 'activated' : 'deactivated'}.`);
+          fetchInit();
+          if (selectedStudent && selectedStudent.id === s.id) {
+            setSelectedStudent(prev => ({ ...prev, is_active: nextStatus }));
+          }
+        } catch {
+          showToast('Failed to update student status.');
+        }
+      }
+    });
+  };
+
+  const handleDelete = (s) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to delete student "${s.full_name}"? This action cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try { 
+          await deleteStudent(s.id); 
+          showToast('Student deleted.'); 
+          fetchInit(); 
+        } catch { 
+          showToast('Failed to delete student.'); 
+        }
+      }
+    });
   };
 
   const openEdit = (s) => {
@@ -237,29 +349,48 @@ export default function Students() {
     setShowStaffModal(true);
   };
 
-  const exportCSV = () => {
+  const handleExecuteExport = ({ fromDate, fromTime, toDate, toTime, preset }) => {
     try {
       if (!students || students.length === 0) {
-        showToast('No rows to export. There are no student records available.');
-        return;
+        return { error: 'No student records available to export.' };
+      }
+
+      const isDateFiltered = preset !== 'all' && (Boolean(fromDate) || Boolean(toDate));
+      const targetStudents = isDateFiltered
+        ? filterRecordsByDateRange(students, { fromDate, fromTime, toDate, toTime })
+        : students;
+
+      if (targetStudents.length === 0) {
+        return { error: 'No student records found within the selected date & time range.' };
       }
 
       const headers = ['Admission No', 'Roll No', 'First Name', 'Last Name', 'Full Name', 'Class', 'Section', 'Branch', 'Assigned Staff', 'Gender', 'Parent Name', 'Parent Phone', 'Student Phone', 'Status'];
-      const rows = students.map(s => [
-        s.admission_no || '', s.roll_no || '', `"${s.first_name || ''}"`, `"${s.last_name || ''}"`, `"${s.full_name}"`, `"${s.class_name || ''}"`, `"${s.section || ''}"`, `"${s.branch_name || ''}"`, `"${s.teacher_name || ''}"`, s.gender || '', `"${s.parent_name || ''}"`, s.parent_phone || '', s.phone || '', s.is_active ? 'Active' : 'Inactive'
+      const rows = targetStudents.map(s => [
+        s.admission_no || '',
+        s.roll_no || '',
+        s.first_name || '',
+        s.last_name || '',
+        s.full_name || '',
+        s.class_name || '',
+        s.section || '',
+        s.branch_name || '',
+        s.teacher_name || '',
+        s.gender || '',
+        s.parent_name || '',
+        s.parent_phone || '',
+        s.phone || '',
+        s.is_active ? 'Active' : 'Inactive'
       ]);
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `students_list_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Student CSV exported successfully.');
+
+      const filename = generateExportFilename('students_list', { fromDate, toDate, preset });
+      downloadCSV(filename, headers, rows);
+
+      setShowExportModal(false);
+      showToast(`Student CSV exported successfully (${targetStudents.length} rows).`);
+      return { success: true };
     } catch (error) {
       console.error('Student CSV export failed:', error);
-      showToast('CSV export failed. Please try again.');
+      return { error: 'CSV export failed. Please try again.' };
     }
   };
 
@@ -269,14 +400,7 @@ export default function Students() {
       ['ADM2024001', '101', 'Aarav', 'Patel', '10th', 'A', branches[0]?.name || 'Main Campus', 'Male', '2009-05-15', '9876543210', 'Rajesh Patel', '9876543211'],
       ['ADM2024002', '102', 'Diya', 'Sharma', '10th', 'A', branches[0]?.name || 'Main Campus', 'Female', '2009-08-20', '9876543212', 'Suresh Sharma', '9876543213']
     ];
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...sampleRows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', 'sample_students_import.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCSV('sample_students_import.csv', headers, sampleRows);
   };
 
   const handleFileUpload = (e) => {
@@ -400,7 +524,7 @@ export default function Students() {
 
   return (
     <Layout title="Students" subtitle="Manage student enrollment, profiles, and academic records">
-      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
+      {toast && <div className="alert alert-success alert-toast"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Top Stats Cards */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
@@ -470,23 +594,27 @@ export default function Students() {
           <button className="btn btn-secondary btn-sm" onClick={downloadSampleCSV} title="Download Sample CSV Template" style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
             <MdDownload size={14} /> Sample CSV
           </button>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              setImportError('');
-              setShowImportModal(true);
-            }}
-            title="Import Students from CSV"
-            style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}
-          >
-            <MdUpload size={14} /> Import Students
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export CSV" style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
+          {!isReadOnly && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setImportError('');
+                setShowImportModal(true);
+              }}
+              title="Import Students from CSV"
+              style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}
+            >
+              <MdUpload size={14} /> Import Students
+            </button>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)} title="Export CSV with Custom Time Range" style={{ padding: '6px 10px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
             <MdDownload size={14} /> Export CSV
           </button>
-          <button className="btn btn-primary" onClick={openAdd} style={{ padding: '6px 12px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
-            <MdAdd size={16} /> Enroll Student
-          </button>
+          {!isReadOnly && (
+            <button className="btn btn-primary" onClick={openAdd} style={{ padding: '6px 12px', fontSize: 12.5, height: 36, whiteSpace: 'nowrap' }}>
+              <MdAdd size={16} /> Enroll Student
+            </button>
+          )}
         </div>
       </div>
 
@@ -568,7 +696,7 @@ export default function Students() {
           <>
             <button type="button" className="btn btn-secondary" onClick={() => { setShowModal(false); setFieldErrors({}); }}>Cancel</button>
             <button type="submit" form="student-edit-form" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Student'}
+              {saving ? 'Saving...' : (editItem ? 'Save Student' : 'Add Student')}
             </button>
           </>
         }
@@ -576,24 +704,32 @@ export default function Students() {
         <form id="student-edit-form" onSubmit={handleSubmit}>
           <div className="form-row">
             <div className="form-group">
-              <label>First Name *</label>
+              <label>First Name * <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}></span></label>
               <input 
                 className="input" 
-                placeholder="First name" 
+                placeholder="e.g. Rahul" 
                 value={form.firstName} 
-                onChange={(e) => { setForm({ ...form, firstName: e.target.value }); setFieldErrors({ ...fieldErrors, firstName: '' }); }} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                  setForm({ ...form, firstName: val }); 
+                  setFieldErrors({ ...fieldErrors, firstName: '' }); 
+                }} 
                 style={{ borderColor: fieldErrors.firstName ? '#ef4444' : '' }}
                 required 
               />
               {fieldErrors.firstName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.firstName}</div>}
             </div>
             <div className="form-group">
-              <label>Last Name *</label>
+              <label>Last Name * <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}></span></label>
               <input 
                 className="input" 
-                placeholder="Last name" 
+                placeholder="e.g. Sharma" 
                 value={form.lastName} 
-                onChange={(e) => { setForm({ ...form, lastName: e.target.value }); setFieldErrors({ ...fieldErrors, lastName: '' }); }} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                  setForm({ ...form, lastName: val }); 
+                  setFieldErrors({ ...fieldErrors, lastName: '' }); 
+                }} 
                 style={{ borderColor: fieldErrors.lastName ? '#ef4444' : '' }}
                 required 
               />
@@ -603,23 +739,31 @@ export default function Students() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Admission No *</label>
+              <label>Admission No * <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}></span></label>
               <input 
                 className="input" 
                 placeholder="e.g. ADM2024001" 
                 value={form.admissionNo} 
-                onChange={(e) => { setForm({ ...form, admissionNo: e.target.value }); setFieldErrors({ ...fieldErrors, admissionNo: '' }); }} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+                  setForm({ ...form, admissionNo: val }); 
+                  setFieldErrors({ ...fieldErrors, admissionNo: '' }); 
+                }} 
                 style={{ fontFamily: 'monospace', borderColor: fieldErrors.admissionNo ? '#ef4444' : '' }} 
               />
               {fieldErrors.admissionNo && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.admissionNo}</div>}
             </div>
             <div className="form-group">
-              <label>Roll No *</label>
+              <label>Roll No * <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}></span></label>
               <input 
                 className="input" 
                 placeholder="e.g. R001" 
                 value={form.rollNo} 
-                onChange={(e) => { setForm({ ...form, rollNo: e.target.value }); setFieldErrors({ ...fieldErrors, rollNo: '' }); }} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+                  setForm({ ...form, rollNo: val }); 
+                  setFieldErrors({ ...fieldErrors, rollNo: '' }); 
+                }} 
                 style={{ borderColor: fieldErrors.rollNo ? '#ef4444' : '' }}
               />
               {fieldErrors.rollNo && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.rollNo}</div>}
@@ -662,12 +806,18 @@ export default function Students() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Student Phone</label>
+              <label>Student Phone <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}></span></label>
               <input 
                 className="input" 
+                type="tel"
+                maxLength={10}
                 placeholder="10-digit mobile number" 
                 value={form.phone} 
-                onChange={(e) => { setForm({ ...form, phone: e.target.value }); setFieldErrors({ ...fieldErrors, phone: '' }); }} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                  setForm({ ...form, phone: val }); 
+                  setFieldErrors({ ...fieldErrors, phone: '' }); 
+                }} 
                 style={{ borderColor: fieldErrors.phone ? '#ef4444' : '' }}
               />
               {fieldErrors.phone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.phone}</div>}
@@ -676,16 +826,34 @@ export default function Students() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Parent / Guardian Name</label>
-              <input className="input" placeholder="Parent name" value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label>Parent Contact Phone</label>
+              <label>Parent / Guardian Name <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}></span></label>
               <input 
                 className="input" 
+                placeholder="Parent name" 
+                value={form.parentName} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                  setForm({ ...form, parentName: val }); 
+                  setFieldErrors({ ...fieldErrors, parentName: '' }); 
+                }} 
+                style={{ borderColor: fieldErrors.parentName ? '#ef4444' : '' }}
+              />
+              {fieldErrors.parentName && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.parentName}</div>}
+            </div>
+            <div className="form-group">
+              <label>Parent Contact Phone <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+                </span></label>
+              <input 
+                className="input" 
+                type="tel"
+                maxLength={10}
                 placeholder="10-digit mobile number" 
                 value={form.parentPhone} 
-                onChange={(e) => { setForm({ ...form, parentPhone: e.target.value }); setFieldErrors({ ...fieldErrors, parentPhone: '' }); }} 
+                onChange={(e) => { 
+                  const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                  setForm({ ...form, parentPhone: val }); 
+                  setFieldErrors({ ...fieldErrors, parentPhone: '' }); 
+                }} 
                 style={{ borderColor: fieldErrors.parentPhone ? '#ef4444' : '' }}
               />
               {fieldErrors.parentPhone && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdWarning style={{ verticalAlign: 'middle' }} /> {fieldErrors.parentPhone}</div>}
@@ -915,13 +1083,42 @@ export default function Students() {
               <div><strong>Status:</strong> <span className={`badge ${selectedStudent.is_active ? 'badge-success' : 'badge-danger'}`}>{selectedStudent.is_active ? 'Active' : 'Inactive'}</span></div>
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
-              <button className="btn btn-secondary" onClick={() => { setShowDetailModal(false); openEdit(selectedStudent); }}><MdEdit /> Edit Student</button>
-              <button className="btn" onClick={() => handleToggleStatus(selectedStudent)} style={{ background: selectedStudent.is_active ? '#fef3c7' : '#dcfce7', color: selectedStudent.is_active ? '#d97706' : '#15803d' }}><MdCancel /> {selectedStudent.is_active ? 'Deactivate Student' : 'Activate Student'}</button>
-              <button className="btn btn-danger" onClick={() => { setShowDetailModal(false); handleDelete(selectedStudent); }}><MdDelete /> Delete Student</button>
+              {!isReadOnly && (
+                <>
+                  <button className="btn btn-secondary" onClick={() => { setShowDetailModal(false); openEdit(selectedStudent); }}><MdEdit /> Edit Student</button>
+                  <button className="btn" onClick={() => handleToggleStatus(selectedStudent)} style={{ background: selectedStudent.is_active ? '#fef3c7' : '#dcfce7', color: selectedStudent.is_active ? '#d97706' : '#15803d' }}><MdCancel /> {selectedStudent.is_active ? 'Deactivate Student' : 'Activate Student'}</button>
+                </>
+              )}
+              {canDelete && (
+                <button className="btn btn-danger" onClick={() => { setShowDetailModal(false); handleDelete(selectedStudent); }}><MdDelete /> Delete Student</button>
+              )}
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Export CSV Modal */}
+      <ExportCSVModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Student Records"
+        isAttendance={false}
+        records={students}
+        onExport={handleExecuteExport}
+      />
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

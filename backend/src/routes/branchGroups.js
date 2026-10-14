@@ -1,15 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // GET /api/branch-groups
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const groups = await pool.query(
       `SELECT * FROM branch_groups
-       WHERE org_id = $1
-       ${req.admin.branchAccess !== 'all' ? 'AND EXISTS (SELECT 1 FROM branch_group_members scoped_bgm WHERE scoped_bgm.group_id = branch_groups.id AND scoped_bgm.branch_id = $2)' : ''}
+       WHERE org_id = $1 AND (is_deleted IS NOT TRUE)
+       ${req.admin.branchAccess !== 'all' ? 'AND EXISTS (SELECT 1 FROM branch_group_members scoped_bgm JOIN branches scoped_b ON scoped_b.id = scoped_bgm.branch_id WHERE scoped_bgm.group_id = branch_groups.id AND scoped_bgm.branch_id = $2 AND (scoped_b.is_deleted IS NOT TRUE))' : ''}
        ORDER BY name`,
       req.admin.branchAccess !== 'all' ? [req.admin.orgId, req.admin.branchAccess] : [req.admin.orgId]
     );
@@ -17,7 +17,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await Promise.all(groups.rows.map(async (group) => {
       const members = await pool.query(
         `SELECT b.id, b.name, b.code FROM branch_group_members bgm
-         JOIN branches b ON b.id = bgm.branch_id WHERE bgm.group_id = $1${req.admin.branchAccess !== 'all' ? ' AND b.id = $2' : ''}`,
+         JOIN branches b ON b.id = bgm.branch_id WHERE bgm.group_id = $1 AND (b.is_deleted IS NOT TRUE)${req.admin.branchAccess !== 'all' ? ' AND b.id = $2' : ''}`,
         req.admin.branchAccess !== 'all' ? [group.id, req.admin.branchAccess] : [group.id]
       );
       return { ...group, branches: members.rows };
@@ -30,7 +30,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // POST /api/branch-groups
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, requireFullAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, branchIds = [] } = req.body;
@@ -60,7 +60,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // PUT /api/branch-groups/:id
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, branchIds = [] } = req.body;
@@ -92,9 +92,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/branch-groups/:id
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
-    await pool.query('DELETE FROM branch_groups WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE branch_groups SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Branch group deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

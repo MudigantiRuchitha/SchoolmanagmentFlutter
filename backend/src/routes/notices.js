@@ -10,7 +10,7 @@ router.get('/', authMiddleware, async (req, res) => {
     let query = `
       SELECT n.*, au.full_name as created_by_name
       FROM notices n LEFT JOIN admin_users au ON au.id = n.created_by
-      WHERE n.org_id = $1 AND n.is_active = true`;
+      WHERE n.org_id = $1 AND n.is_active = true AND (n.is_deleted IS NOT TRUE)`;
     const params = [req.admin.orgId];
 
     if (audience) { query += ' AND (n.audience = $2 OR n.audience = \'all\')'; params.push(audience); }
@@ -57,7 +57,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // DELETE /api/notices/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    await pool.query('UPDATE notices SET is_active = false WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE notices SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP, is_active = false WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Notice removed.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

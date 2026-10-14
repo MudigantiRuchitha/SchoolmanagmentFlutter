@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
 import { getAcademicGroups, createAcademicGroup, updateAcademicGroup, deleteAcademicGroup } from '../api';
 import { MdAdd, MdEdit, MdDelete, MdCategory } from 'react-icons/md';
 
@@ -15,6 +16,37 @@ export default function AcademicGroups() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
   useEffect(() => { fetch(); }, []);
 
@@ -24,8 +56,7 @@ export default function AcademicGroups() {
     setLoading(false);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const executeSave = async () => {
     setSaving(true);
     try {
       if (editItem) { await updateAcademicGroup(editItem.id, form); showToast('Group updated!'); }
@@ -35,9 +66,33 @@ export default function AcademicGroups() {
     setSaving(false);
   };
 
-  const handleDelete = async (g) => {
-    if (!confirm(`Delete "${g.name}"?`)) return;
-    try { await deleteAcademicGroup(g.id); showToast('Deleted.'); fetch(); } catch { showToast('Failed.'); }
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    if (!editItem) {
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to add academic group "${form.name}"?`,
+        confirmText: 'Yes, Add Group',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+    executeSave();
+  };
+
+  const handleDelete = (g) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to delete academic group "${g.name}"? This action cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try { await deleteAcademicGroup(g.id); showToast('Deleted.'); fetch(); } catch { showToast('Failed.'); }
+      }
+    });
   };
 
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6'];
@@ -82,12 +137,25 @@ export default function AcademicGroups() {
       )}
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? 'Edit Academic Group' : 'Add Academic Group'} size="sm"
-        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button></>}>
+        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving...' : (editItem ? 'Save Group' : 'Add Group')}</button></>}>
         <form onSubmit={handleSubmit}>
           <div className="form-group"><label>Group Name *</label><input className="input" placeholder="e.g. Primary, Secondary" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
           <div className="form-group"><label>Description</label><textarea className="input" placeholder="e.g. Classes 1 to 5" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} /></div>
         </form>
       </Modal>
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

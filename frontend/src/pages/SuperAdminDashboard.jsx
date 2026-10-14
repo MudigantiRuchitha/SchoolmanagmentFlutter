@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getSuperAdminStats, getSuperAdminOrgs, createOrg, updateOrg, deleteOrg } from '../api';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
 import { MdBusiness, MdGroup, MdPeople, MdSchool, MdAdd, MdEdit, MdDelete, MdLogout, MdCheckCircle, MdCancel, MdKey, MdArrowBack, MdAccessTime, MdVisibility } from 'react-icons/md';
 
 export default function SuperAdminDashboard() {
@@ -22,6 +23,37 @@ export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   const superAdmin = JSON.parse(localStorage.getItem('superAdmin') || '{}');
 
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   useEffect(() => {
@@ -40,8 +72,7 @@ export default function SuperAdminDashboard() {
     setLoading(false);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const executeSave = async () => {
     const editingOrganisation = editOrg;
     setSaving(true);
     try {
@@ -82,23 +113,56 @@ export default function SuperAdminDashboard() {
     setSaving(false);
   };
 
-  const handleDelete = async (org) => {
-    if (!confirm(`Delete organisation "${org.name}"? This will delete ALL data.`)) return;
-    try {
-      await deleteOrg(org.id);
-      showToast('Organisation deleted.');
-      fetchData();
-    } catch { showToast('Failed to delete.'); }
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    if (!editOrg) {
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to create organisation "${form.name}"?`,
+        confirmText: 'Yes, Create Organisation',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+    executeSave();
   };
 
-  const handleToggle = async (org) => {
-    try {
-      await updateOrg(org.id, { isActive: !org.is_active });
-      showToast(`Organisation ${org.is_active ? 'deactivated' : 'activated'}.`);
-      await fetchData();
-      setViewOrg({ ...org, is_active: !org.is_active });
-      setShowOrgViewModal(true);
-    } catch { showToast('Failed to update.'); }
+  const handleDelete = (org) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Delete organisation "${org.name}"? This will delete ALL data and cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteOrg(org.id);
+          showToast('Organisation deleted.');
+          fetchData();
+        } catch { showToast('Failed to delete.'); }
+      }
+    });
+  };
+
+  const handleToggle = (org) => {
+    const nextStatus = !org.is_active;
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to ${org.is_active ? 'deactivate' : 'activate'} organisation "${org.name}"?`,
+      confirmText: org.is_active ? 'Yes, Deactivate' : 'Yes, Activate',
+      type: org.is_active ? 'warning' : 'success',
+      onConfirm: async () => {
+        try {
+          await updateOrg(org.id, { isActive: nextStatus });
+          showToast(`Organisation ${org.is_active ? 'deactivated' : 'activated'}.`);
+          await fetchData();
+          setViewOrg({ ...org, is_active: nextStatus });
+          setShowOrgViewModal(true);
+        } catch { showToast('Failed to update.'); }
+      }
+    });
   };
 
   const openCreate = () => { resetForm(); setEditOrg(null); setShowModal(true); };
@@ -409,6 +473,19 @@ export default function SuperAdminDashboard() {
           )}
         </form>
       </Modal>
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </div>
   );
 }

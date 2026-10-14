@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 import {
   getLeaves,
@@ -27,7 +28,7 @@ import {
 import { format } from 'date-fns';
 
 export default function LeaveManagement() {
-  const { user } = useAuth();
+  const { user, isReadOnly, canDelete } = useAuth();
 
   const [leaves, setLeaves] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -57,6 +58,37 @@ export default function LeaveManagement() {
 
   const [formError, setFormError] = useState('');
   const [typeFormError, setTypeFormError] = useState('');
+
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
 
   const [form, setForm] = useState({
     staffId: '',
@@ -145,22 +177,7 @@ export default function LeaveManagement() {
      APPLY LEAVE
   ========================= */
 
-  const handleApply = async (e) => {
-    e.preventDefault();
-
-    if (!form.staffId || !form.fromDate || !form.toDate) {
-      setFormError(
-        'Please select a staff member and enter both the from and to dates.'
-      );
-      return;
-    }
-
-    if (form.toDate < form.fromDate) {
-      setFormError('The to date cannot be earlier than the from date.');
-      return;
-    }
-
-    setFormError('');
+  const executeApply = async () => {
     setSaving(true);
 
     try {
@@ -202,6 +219,34 @@ export default function LeaveManagement() {
     }
 
     setSaving(false);
+  };
+
+  const handleApply = (e) => {
+    e?.preventDefault();
+
+    if (!form.staffId || !form.fromDate || !form.toDate) {
+      setFormError(
+        'Please select a staff member and enter both the from and to dates.'
+      );
+      return;
+    }
+
+    if (form.toDate < form.fromDate) {
+      setFormError('The to date cannot be earlier than the from date.');
+      return;
+    }
+
+    setFormError('');
+
+    requestConfirm({
+      title: 'Are you sure?',
+      message: 'Are you sure you want to submit this leave application?',
+      confirmText: 'Yes, Submit Leave',
+      type: 'primary',
+      onConfirm: async () => {
+        await executeApply();
+      }
+    });
   };
 
   /* =========================
@@ -274,51 +319,42 @@ export default function LeaveManagement() {
      DELETE LEAVE
   ========================= */
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this leave record?')) return;
-
-    try {
-      await deleteLeave(id);
-
-      showToast('Leave record deleted.');
-
-      /* Close details after deletion */
-      setShowDetailsModal(false);
-      setSelectedLeave(null);
-
-      fetchLeaves();
-    } catch {
-      showToast('Failed to delete.');
-    }
+  const handleDelete = (id) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: 'Are you sure you want to delete this leave record? This action cannot be undone.',
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteLeave(id);
+          showToast('Leave record deleted.');
+          setShowDetailsModal(false);
+          setSelectedLeave(null);
+          fetchLeaves();
+        } catch {
+          showToast('Failed to delete.');
+        }
+      }
+    });
   };
 
   /* =========================
      LEAVE TYPE
   ========================= */
 
-  const handleAddType = async (e) => {
-    e.preventDefault();
-
-    if (!typeForm.name.trim()) {
-      setTypeFormError('Leave type name is required.');
-      return;
-    }
-
+  const executeAddType = async () => {
     setTypeFormError('');
     setSaving(true);
 
     try {
       await createLeaveType(typeForm);
-
       showToast('New leave type added!');
-
       setTypeForm({
         name: '',
         maxDays: 1
       });
-
       setTypeFormError('');
-
       fetchInit();
     } catch {
       showToast('Failed to add leave type.');
@@ -327,16 +363,41 @@ export default function LeaveManagement() {
     setSaving(false);
   };
 
-  const handleDeleteType = async (id) => {
-    try {
-      await deleteLeaveType(id);
+  const handleAddType = (e) => {
+    e?.preventDefault();
 
-      showToast('Leave type deleted.');
-
-      fetchInit();
-    } catch {
-      showToast('Failed to delete leave type.');
+    if (!typeForm.name.trim()) {
+      setTypeFormError('Leave type name is required.');
+      return;
     }
+
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to add leave type "${typeForm.name}"?`,
+      confirmText: 'Yes, Add Leave Type',
+      type: 'primary',
+      onConfirm: async () => {
+        await executeAddType();
+      }
+    });
+  };
+
+  const handleDeleteType = (id) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: 'Are you sure you want to delete this leave type? This action cannot be undone.',
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteLeaveType(id);
+          showToast('Leave type deleted.');
+          fetchInit();
+        } catch {
+          showToast('Failed to delete leave type.');
+        }
+      }
+    });
   };
 
   /* =========================
@@ -557,35 +618,36 @@ export default function LeaveManagement() {
 
         <div className="toolbar-right">
 
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() =>
-              setShowTypeModal(true)
-            }
-          >
-            <MdFilterList
-              style={{
-                verticalAlign: 'middle',
-                marginRight: 6
-              }}
-            />
+          {!isReadOnly && (
+            <>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() =>
+                  setShowTypeModal(true)
+                }
+              >
+                <MdFilterList
+                  style={{
+                    verticalAlign: 'middle',
+                    marginRight: 6
+                  }}
+                />
+                Manage Leave Types
+              </button>
 
-            Manage Leave Types
-          </button>
-
-          <button
-            className="btn btn-primary"
-            onClick={() =>
-              setShowApplyModal(true)
-            }
-          >
-            <MdAdd />
-
-            {isManagementUser
-              ? 'Inform About Leave'
-              : 'Apply Leave'}
-          </button>
-
+              <button
+                className="btn btn-primary"
+                onClick={() =>
+                  setShowApplyModal(true)
+                }
+              >
+                <MdAdd />
+                {isManagementUser
+                  ? 'Inform About Leave'
+                  : 'Apply Leave'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -845,7 +907,8 @@ export default function LeaveManagement() {
 
             {selectedLeave &&
               selectedLeave.status !== 'informed' &&
-              !isManagementStaff(selectedLeave) && (
+              !isManagementStaff(selectedLeave) &&
+              canDelete && (
                 <button
                   className="btn"
                   style={{
@@ -868,7 +931,8 @@ export default function LeaveManagement() {
 
             {selectedLeave &&
               selectedLeave.status === 'pending' &&
-              !isManagementStaff(selectedLeave) && (
+              !isManagementStaff(selectedLeave) &&
+              !isReadOnly && (
                 <>
                   <button
                     className="btn btn-danger"
@@ -1887,6 +1951,18 @@ export default function LeaveManagement() {
 
       </Modal>
 
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

@@ -15,7 +15,7 @@ export default function Settings() {
   const [passError, setPassError] = useState('');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
-  const { org } = useAuth();
+  const { org, isFullAdmin } = useAuth();
   const loginUrl = typeof window !== 'undefined' ? new URL('/login', window.location.origin).toString() : '/login';
 
   useEffect(() => {
@@ -64,14 +64,22 @@ export default function Settings() {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}><MdWarning style={{ verticalAlign: 'middle', marginRight: 4 }} /> Code cannot be changed. Share this with your org admins.</div>
               </div>
 
-              <div className="form-group"><label>Organisation Name</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              {!isFullAdmin && (
+                <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 12.5, color: '#1e40af', marginBottom: 16 }}>
+                  Organisation profile settings can only be altered by Full Administrators. You are in read-only mode.
+                </div>
+              )}
+
+              <div className="form-group"><label>Organisation Name</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} disabled={!isFullAdmin} /></div>
               <div className="form-row">
-                <div className="form-group"><label>Phone</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="form-group"><label>Email</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="form-group"><label>Phone</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} disabled={!isFullAdmin} /></div>
+                <div className="form-group"><label>Email</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={!isFullAdmin} /></div>
               </div>
-              <div className="form-group"><label>Domain</label><input className="input" placeholder="e.g. school.edu.in" value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} /></div>
-              <div className="form-group"><label>Address</label><textarea className="input" rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-              <button type="submit" className="btn btn-primary" disabled={saving}><MdSave /> {saving ? 'Saving...' : 'Save Changes'}</button>
+              <div className="form-group"><label>Domain</label><input className="input" placeholder="e.g. school.edu.in" value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} disabled={!isFullAdmin} /></div>
+              <div className="form-group"><label>Address</label><textarea className="input" rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} disabled={!isFullAdmin} /></div>
+              {isFullAdmin && (
+                <button type="submit" className="btn btn-primary" disabled={saving}><MdSave /> {saving ? 'Saving...' : 'Save Changes'}</button>
+              )}
             </form>
           </div>
         </div>

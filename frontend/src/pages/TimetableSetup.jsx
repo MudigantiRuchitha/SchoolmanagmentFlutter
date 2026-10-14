@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
 import {
   getBranches,
   getClasses,
@@ -24,6 +25,7 @@ import {
 import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
 
 export default function TimetableSetup() {
+  const { isReadOnly } = useAuth();
 
   // =========================================================
   // BASIC DATA
@@ -1155,32 +1157,28 @@ export default function TimetableSetup() {
       title="Timetable & Attendance Setup"
       subtitle="Configure Attendance Mode (Morning/Evening vs Period-wise Subject Timetable)"
       headerRight={
-
-        <button
-          className="btn btn-primary"
-          onClick={
-            handleSaveSettings
-          }
-          disabled={saving}
-        >
-
-          <MdSave />
-
-          {saving
-
-            ? 'Saving...'
-
-            : attendanceMode ===
-              'MORNING_EVENING'
-
-              ? 'Save Morning & Evening Times'
-
-              : 'Save Class Period Timetable'
-
-          }
-
-        </button>
-
+        isReadOnly ? (
+          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600, padding: '6px 12px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+            Only Read (Viewer Mode)
+          </span>
+        ) : (
+          <button
+            className="btn btn-primary"
+            onClick={
+              handleSaveSettings
+            }
+            disabled={saving}
+          >
+            <MdSave />
+            {saving
+              ? 'Saving...'
+              : attendanceMode ===
+                'MORNING_EVENING'
+                ? 'Save Morning & Evening Times'
+                : 'Save Class Period Timetable'
+            }
+          </button>
+        )
       }
     >
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
 import { getBranchGroups, createBranchGroup, updateBranchGroup, deleteBranchGroup, getBranches } from '../api';
 import { MdAdd, MdEdit, MdDelete, MdWorkspaces } from 'react-icons/md';
 import { filterBranches } from '../utils/branchScope';
@@ -16,6 +17,37 @@ export default function BranchGroups() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
   useEffect(() => { fetchInit(); }, []);
@@ -35,8 +67,7 @@ export default function BranchGroups() {
     setForm({ ...form, branchIds: ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id] });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const executeSave = async () => {
     setSaving(true);
     try {
       if (editItem) { await updateBranchGroup(editItem.id, form); showToast('Updated!'); }
@@ -46,9 +77,33 @@ export default function BranchGroups() {
     setSaving(false);
   };
 
-  const handleDelete = async (g) => {
-    if (!confirm(`Delete group "${g.name}"?`)) return;
-    try { await deleteBranchGroup(g.id); showToast('Deleted.'); fetchInit(); } catch { showToast('Failed.'); }
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    if (!editItem) {
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to create branch group "${form.name}"?`,
+        confirmText: 'Yes, Create Group',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+    executeSave();
+  };
+
+  const handleDelete = (g) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to delete branch group "${g.name}"? This action cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try { await deleteBranchGroup(g.id); showToast('Deleted.'); fetchInit(); } catch { showToast('Failed.'); }
+      }
+    });
   };
 
   return (
@@ -97,7 +152,7 @@ export default function BranchGroups() {
       )}
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? 'Edit Branch Group' : 'Create Branch Group'}
-        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button></>}>
+        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving...' : (editItem ? 'Save Group' : 'Create Group')}</button></>}>
         <form onSubmit={handleSubmit}>
           <div className="form-group"><label>Group Name *</label><input className="input" placeholder="e.g. North Zone, Metro Branches" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
           <div className="form-group">
@@ -114,6 +169,19 @@ export default function BranchGroups() {
           </div>
         </form>
       </Modal>
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

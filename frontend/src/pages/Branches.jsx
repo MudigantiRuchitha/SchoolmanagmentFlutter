@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
+import ExportCSVModal from '../components/ExportCSVModal';
 import { useAuth } from '../context/AuthContext';
 import { getBranches, createBranch, updateBranch, deleteBranch, getBranchDetails } from '../api';
 import { 
@@ -8,6 +10,7 @@ import {
   MdPerson, MdCheckCircle, MdCancel, MdVisibility, MdDownload, MdFilterList, 
   MdLocationOn, MdGpsFixed, MdAdminPanelSettings, MdLock, MdSchool, MdPeople
 } from 'react-icons/md';
+import { downloadCSV, filterRecordsByDateRange, generateExportFilename } from '../utils/csvExport';
 
 const emptyForm = { 
   name: '', code: '', contactPerson: '', phone: '', email: '', address: '', 
@@ -16,7 +19,7 @@ const emptyForm = {
 };
 
 export default function Branches() {
-  const { user } = useAuth();
+  const { user, isFullAdmin } = useAuth();
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -28,8 +31,40 @@ export default function Branches() {
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [toast, setToast] = useState('');
   const [formError, setFormError] = useState('');
+
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
   const isDedicatedBranchUser = Boolean(user?.branchAccess && user.branchAccess !== 'all');
@@ -88,48 +123,82 @@ export default function Branches() {
       return;
     }
     setFormError('');
-    setSaving(true);
-    try {
-      if (editItem) { 
-        await updateBranch(editItem.id, form); 
-        showToast('Branch details updated successfully!'); 
-      } else { 
-        const res = await createBranch(form); 
-        if (res.data.admin) {
-          showToast(`Branch & Branch Admin "${res.data.admin.username}" created successfully!`);
-        } else {
-          showToast('New branch created successfully!');
+    
+    const executeSave = async () => {
+      setSaving(true);
+      try {
+        if (editItem) { 
+          await updateBranch(editItem.id, form); 
+          showToast('Branch details updated successfully!'); 
+        } else { 
+          const res = await createBranch(form); 
+          if (res.data.admin) {
+            showToast(`Branch & Branch Admin "${res.data.admin.username}" created successfully!`);
+          } else {
+            showToast('New branch created successfully!');
+          }
+        }
+        setShowModal(false); 
+        setEditItem(null); 
+        setForm(emptyForm); 
+        fetchBranches();
+      } catch (err) {
+        setFormError(err.response?.data?.message || 'Error occurred while saving branch.');
+      }
+      setSaving(false);
+    };
+
+    if (!editItem) {
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to add new branch "${form.name}"?`,
+        confirmText: 'Yes, Add Branch',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+
+    await executeSave();
+  };
+
+  const handleToggleStatus = (b) => {
+    const nextStatus = !b.is_active;
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to ${nextStatus ? 'activate' : 'deactivate'} branch "${b.name}"?`,
+      confirmText: nextStatus ? 'Yes, Activate' : 'Yes, Deactivate',
+      type: nextStatus ? 'success' : 'warning',
+      onConfirm: async () => {
+        try {
+          await updateBranch(b.id, { isActive: nextStatus });
+          showToast(`Branch "${b.name}" ${nextStatus ? 'activated' : 'deactivated'}.`);
+          fetchBranches();
+        } catch {
+          showToast('Failed to update branch status.');
         }
       }
-      setShowModal(false); 
-      setEditItem(null); 
-      setForm(emptyForm); 
-      fetchBranches();
-    } catch (err) {
-      setFormError(err.response?.data?.message || 'Error occurred while saving branch.');
-    }
-    setSaving(false);
+    });
   };
 
-  const handleToggleStatus = async (b) => {
-    try {
-      await updateBranch(b.id, { isActive: !b.is_active });
-      showToast(`Branch "${b.name}" ${!b.is_active ? 'activated' : 'deactivated'}.`);
-      fetchBranches();
-    } catch {
-      showToast('Failed to update branch status.');
-    }
-  };
-
-  const handleDelete = async (b) => {
-    if (!confirm(`Are you sure you want to delete branch "${b.name}"? This action cannot be undone.`)) return;
-    try { 
-      await deleteBranch(b.id); 
-      showToast('Branch deleted successfully.'); 
-      fetchBranches(); 
-    } catch { 
-      showToast('Failed to delete branch.'); 
-    }
+  const handleDelete = (b) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to delete branch "${b.name}"? This action cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try { 
+          await deleteBranch(b.id); 
+          showToast('Branch deleted successfully.'); 
+          fetchBranches(); 
+        } catch { 
+          showToast('Failed to delete branch.'); 
+        }
+      }
+    });
   };
 
   const openEdit = (b) => {
@@ -168,29 +237,47 @@ export default function Branches() {
     setLoadingDetails(false);
   };
 
-  const exportCSV = () => {
+  const handleExecuteExport = ({ fromDate, fromTime, toDate, toTime, preset }) => {
     try {
       if (!branches || branches.length === 0) {
-        showToast('No rows to export. There are no branch records available.');
-        return;
+        return { error: 'No branch records available to export.' };
+      }
+
+      const isDateFiltered = preset !== 'all' && (Boolean(fromDate) || Boolean(toDate));
+      const targetBranches = isDateFiltered
+        ? filterRecordsByDateRange(branches, { fromDate, fromTime, toDate, toTime })
+        : branches;
+
+      if (targetBranches.length === 0) {
+        return { error: 'No branches found within the selected date & time range.' };
       }
 
       const headers = ['ID', 'Branch Name', 'Code', 'Contact Person', 'Phone', 'Email', 'Address', 'Latitude', 'Longitude', 'Geofence Radius (m)', 'Students', 'Staff', 'Status'];
-      const rows = branches.map(b => [
-        b.id, `"${b.name}"`, b.code || '', `"${b.contact_person || ''}"`, b.phone || '', b.email || '', `"${b.address || ''}"`, b.latitude || '', b.longitude || '', b.geofence_radius || 100, b.student_count, b.staff_count, b.is_active ? 'Active' : 'Inactive'
+      const rows = targetBranches.map(b => [
+        b.id,
+        b.name || '',
+        b.code || '',
+        b.contact_person || '',
+        b.phone || '',
+        b.email || '',
+        b.address || '',
+        b.latitude || '',
+        b.longitude || '',
+        b.geofence_radius || 100,
+        b.student_count || 0,
+        b.staff_count || 0,
+        b.is_active ? 'Active' : 'Inactive'
       ]);
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `branches_list_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Branch CSV exported successfully.');
+
+      const filename = generateExportFilename('branches_list', { fromDate, toDate, preset });
+      downloadCSV(filename, headers, rows);
+
+      setShowExportModal(false);
+      showToast(`Branch CSV exported successfully (${targetBranches.length} rows).`);
+      return { success: true };
     } catch (error) {
       console.error('Branch CSV export failed:', error);
-      showToast('CSV export failed. Please try again.');
+      return { error: 'CSV export failed. Please try again.' };
     }
   };
 
@@ -212,7 +299,7 @@ export default function Branches() {
 
   return (
     <Layout title="Branches" subtitle="Manage campus locations, geofencing GPS coordinates, and branch administrators">
-      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
+      {toast && <div className="alert alert-success alert-toast"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Top Stats Cards */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
@@ -282,10 +369,10 @@ export default function Branches() {
         </div>
 
         <div className="toolbar-right">
-          <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export to CSV">
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)} title="Export CSV with Custom Time Range">
             <MdDownload /> Export CSV
           </button>
-          {!isDedicatedBranchUser && (
+          {!isDedicatedBranchUser && isFullAdmin && (
             <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setFormError(''); setEditItem(null); setShowModal(true); }}>
               <MdAdd /> Add Branch
             </button>
@@ -583,6 +670,29 @@ export default function Branches() {
           </div>
         ) : null}
       </Modal>
+
+      {/* Export CSV Modal */}
+      <ExportCSVModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Branches"
+        isAttendance={false}
+        records={branches}
+        onExport={handleExecuteExport}
+      />
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

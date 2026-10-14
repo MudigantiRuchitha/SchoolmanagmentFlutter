@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
+import { useAuth } from '../context/AuthContext';
 import { getHolidays, createHoliday, updateHoliday, deleteHoliday } from '../api';
 import { MdAdd, MdEdit, MdDelete, MdCalendarToday, MdFilterList } from 'react-icons/md';
 import { format, getDaysInMonth, startOfMonth, getDay } from 'date-fns';
@@ -11,6 +13,7 @@ const TYPE_COLORS = { national: '#ef4444', regional: '#f59e0b', org: '#6366f1' }
 const emptyForm = { name: '', date: '', type: 'national', description: '' };
 
 export default function Holidays() {
+  const { isReadOnly, canDelete } = useAuth();
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -22,6 +25,37 @@ export default function Holidays() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
 
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   useEffect(() => { fetchHolidays(); }, [currentYear]);
@@ -32,8 +66,7 @@ export default function Holidays() {
     setLoading(false);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const executeSave = async () => {
     setSaving(true);
     try {
       if (editItem) {
@@ -53,9 +86,33 @@ export default function Holidays() {
     setSaving(false);
   };
 
-  const handleDelete = async (h) => {
-    if (!confirm(`Delete holiday "${h.name}"?`)) return;
-    try { await deleteHoliday(h.id); showToast('Holiday deleted.'); fetchHolidays(); } catch { showToast('Failed to delete.'); }
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    if (!editItem) {
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to add holiday "${form.name}"?`,
+        confirmText: 'Yes, Add Holiday',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+    executeSave();
+  };
+
+  const handleDelete = (h) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to delete holiday "${h.name}"? This action cannot be undone.`,
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try { await deleteHoliday(h.id); showToast('Holiday deleted.'); fetchHolidays(); } catch { showToast('Failed to delete.'); }
+      }
+    });
   };
 
   const openEdit = (h) => {
@@ -113,8 +170,8 @@ export default function Holidays() {
                 return (
                   <div key={day} className={`calendar-day ${isToday ? 'today' : ''} ${holiday ? 'holiday' : ''}`}
                     title={holiday ? `${holiday.name} (${holiday.type})` : ''}
-                    style={holiday ? { background: `${TYPE_COLORS[holiday.type]}20`, color: TYPE_COLORS[holiday.type], fontWeight: 700, cursor: 'pointer', borderRadius: 8, border: `1px solid ${TYPE_COLORS[holiday.type]}40` } : {}}
-                    onClick={() => holiday && openEdit(holiday)}>
+                    style={holiday ? { background: `${TYPE_COLORS[holiday.type]}20`, color: TYPE_COLORS[holiday.type], fontWeight: 700, cursor: isReadOnly ? 'default' : 'pointer', borderRadius: 8, border: `1px solid ${TYPE_COLORS[holiday.type]}40` } : {}}
+                    onClick={() => holiday && !isReadOnly && openEdit(holiday)}>
                     <span>{day}</span>
                     {holiday && <span style={{ fontSize: 8, textAlign: 'center', lineHeight: 1, marginTop: 2 }}><MdCalendarToday /></span>}
                   </div>
@@ -138,9 +195,11 @@ export default function Holidays() {
         <div className="card">
           <div className="card-header">
             <div className="card-title"><MdCalendarToday /> Holiday List ({currentYear})</div>
-            <button className="btn btn-primary btn-sm" onClick={() => { setForm(emptyForm); setEditItem(null); setShowModal(true); }}>
-              <MdAdd /> Add Holiday
-            </button>
+            {!isReadOnly && (
+              <button className="btn btn-primary btn-sm" onClick={() => { setForm(emptyForm); setEditItem(null); setShowModal(true); }}>
+                <MdAdd /> Add Holiday
+              </button>
+            )}
           </div>
 
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -172,8 +231,12 @@ export default function Holidays() {
                   <div style={{ fontSize: 11 }}><span style={{ color: TYPE_COLORS[h.type], fontWeight: 700, textTransform: 'capitalize' }}>{h.type}</span>{h.description && ` — ${h.description}`}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-sm btn-secondary" onClick={() => openEdit(h)} title="Edit"><MdEdit size={14} /></button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(h)} title="Delete"><MdDelete size={14} /></button>
+                  {!isReadOnly && (
+                    <button className="btn btn-sm btn-secondary" onClick={() => openEdit(h)} title="Edit"><MdEdit size={14} /></button>
+                  )}
+                  {canDelete && (
+                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(h)} title="Delete"><MdDelete size={14} /></button>
+                  )}
                 </div>
               </div>
             ))}
@@ -183,7 +246,7 @@ export default function Holidays() {
 
       {/* Modal Add / Edit */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? 'Edit Holiday' : 'Add New Holiday'} size="sm"
-        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving...' : 'Save Holiday'}</button></>}>
+        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Saving...' : (editItem ? 'Save Holiday' : 'Add Holiday')}</button></>}>
         <form onSubmit={handleSubmit}>
           <div className="form-group"><label>Holiday Name *</label><input className="input" placeholder="e.g. Independence Day" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
           <div className="form-row">
@@ -197,6 +260,19 @@ export default function Holidays() {
           <div className="form-group"><label>Description</label><input className="input" placeholder="Optional notes/description..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
         </form>
       </Modal>
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

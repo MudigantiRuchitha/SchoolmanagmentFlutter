@@ -2,6 +2,7 @@ const db = require('../config/db');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { generateToken } = require('../utils/jwt');
 const orgs = require('../config/orgs');
+const { recordStaffLoginAttendance, recordStaffLogoutAttendance } = require('../utils/attendanceHelper');
 
 // Standard Teacher Login
 async function login(req, res) {
@@ -25,6 +26,10 @@ async function login(req, res) {
        ON CONFLICT (token) DO UPDATE SET expires_at = NOW() + INTERVAL '1 day'`,
       [teacher.id, token]
     );
+
+    // Automatically record check-in at exact login time (status 'late' if after school hours)
+    await recordStaffLoginAttendance(db, teacher);
+
     const displayStaffId = (teacher.staff_id && String(teacher.staff_id).trim() !== '') ? teacher.staff_id : teacher.id;
     res.json({
       success: true,
@@ -228,6 +233,9 @@ async function deviceLogin(req, res) {
       [teacher.id, token]
     );
 
+    // Automatically record check-in at exact login time (status 'late' if after school hours)
+    await recordStaffLoginAttendance(db, teacher);
+
     const payload = buildStaffPayload(teacher);
 
     res.json({
@@ -422,8 +430,43 @@ async function syncTeacherInfo(req, res) {
   }
 }
 
+// Teacher / Staff Logout (records exact check_out time)
+async function logout(req, res) {
+  const rawId = extractUserId(req);
+  console.log('logout request - rawId:', rawId, 'body:', req.body);
+  try {
+    let teacher = null;
+    if (rawId) {
+      const padded1 = String(rawId).padStart(2, '0');
+      const [rows] = await db.query(
+        `SELECT * FROM staff 
+         WHERE (staff_id = $1::text OR staff_id = $2::text OR LOWER(username) = LOWER($1::text) OR id::text = $1::text)
+           AND is_active = true
+         LIMIT 1`,
+        [String(rawId), padded1]
+      );
+      if (rows.length > 0) teacher = rows[0];
+    }
+
+    if (teacher) {
+      await recordStaffLogoutAttendance(db, teacher);
+    }
+
+    res.json({
+      Status: 1,
+      success: true,
+      message: 'Logout successful and checkout recorded',
+      Exception: null
+    });
+  } catch (err) {
+    console.error('logout error:', err);
+    res.json({ Status: 0, success: false, message: 'Server error: ' + err.message });
+  }
+}
+
 module.exports = {
   login,
+  logout,
   deviceLogin,
   adminLogin,
   changePassword,

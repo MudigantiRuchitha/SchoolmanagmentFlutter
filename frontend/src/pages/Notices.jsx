@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
+import { useAuth } from '../context/AuthContext';
 import { getNotices, createNotice, updateNotice, deleteNotice } from '../api';
 import { MdAdd, MdEdit, MdDelete, MdAnnouncement, MdSearch } from 'react-icons/md';
 import { format } from 'date-fns';
@@ -9,6 +11,7 @@ const AUDIENCE_COLORS = { all: 'badge-purple', staff: 'badge-info', students: 'b
 const emptyForm = { title: '', audience: 'all', content: '' };
 
 export default function Notices() {
+  const { isReadOnly } = useAuth();
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -18,6 +21,37 @@ export default function Notices() {
   const [search, setSearch] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [filterAudience, setFilterAudience] = useState('');
+
+  // Confirmation Warning Modal state
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: 'Are you sure?',
+    message: '',
+    confirmText: 'Yes, Proceed',
+    type: 'warning',
+    onConfirm: null,
+    loading: false
+  });
+
+  const requestConfirm = ({ title = 'Are you sure?', message, confirmText, type = 'warning', onConfirm }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      type,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, loading: true }));
+        try {
+          await onConfirm();
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, loading: false }));
+        } catch (err) {
+          setConfirmDialog(prev => ({ ...prev, loading: false }));
+        }
+      },
+      loading: false
+    });
+  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
   useEffect(() => { fetchNotices(); }, [filterAudience]);
@@ -33,8 +67,7 @@ export default function Notices() {
     setLoading(false);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const executeSave = async () => {
     setSaving(true);
     try {
       if (editItem) {
@@ -52,9 +85,33 @@ export default function Notices() {
     setSaving(false);
   };
 
-  const handleDelete = async (n) => {
-    if (!confirm(`Remove notice "${n.title}"?`)) return;
-    try { await deleteNotice(n.id); showToast('Notice removed.'); fetchNotices(); } catch { showToast('Failed to delete notice.'); }
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    if (!editItem) {
+      requestConfirm({
+        title: 'Are you sure?',
+        message: `Are you sure you want to post notice "${form.title}"?`,
+        confirmText: 'Yes, Post Notice',
+        type: 'primary',
+        onConfirm: async () => {
+          await executeSave();
+        }
+      });
+      return;
+    }
+    executeSave();
+  };
+
+  const handleDelete = (n) => {
+    requestConfirm({
+      title: 'Are you sure?',
+      message: `Are you sure you want to remove notice "${n.title}"? This action cannot be undone.`,
+      confirmText: 'Yes, Remove Notice',
+      type: 'danger',
+      onConfirm: async () => {
+        try { await deleteNotice(n.id); showToast('Notice removed.'); fetchNotices(); } catch { showToast('Failed to delete notice.'); }
+      }
+    });
   };
 
   const openEdit = (n) => {
@@ -96,9 +153,11 @@ export default function Notices() {
           </div>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{filtered.length} notices</span>
         </div>
-        <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditItem(null); setShowModal(true); }}>
-          <MdAdd /> Post Notice
-        </button>
+        {!isReadOnly && (
+          <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditItem(null); setShowModal(true); }}>
+            <MdAdd /> Post Notice
+          </button>
+        )}
       </div>
 
       {loading ? <div className="loading-overlay"><div className="spinner" /> Loading notices...</div> : (
@@ -128,9 +187,11 @@ export default function Notices() {
                       {n.created_by_name && <span>By: {n.created_by_name}</span>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-sm btn-secondary" onClick={() => openEdit(n)} title="Edit Notice"><MdEdit size={14} /></button>
-                  </div>
+                  {!isReadOnly && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(n)} title="Edit Notice"><MdEdit size={14} /></button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -140,7 +201,7 @@ export default function Notices() {
 
       {/* Modal Add / Edit */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? 'Edit Notice' : 'Post New Notice'}
-        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Posting...' : 'Save Notice'}</button></>}>
+        footer={<><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>{saving ? 'Posting...' : (editItem ? 'Save Notice' : 'Post Notice')}</button></>}>
         <form onSubmit={handleSubmit}>
           <div className="form-group"><label>Notice Title *</label><input className="input" placeholder="e.g. Annual Sports Day Announcement" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
           <div className="form-group"><label>Audience</label>
@@ -153,6 +214,19 @@ export default function Notices() {
           <div className="form-group"><label>Notice Message / Content</label><textarea className="input" placeholder="Notice content details..." value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} rows={5} /></div>
         </form>
       </Modal>
+
+      {/* Confirmation Warning Card Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText="Cancel"
+        type={confirmDialog.type}
+        loading={confirmDialog.loading}
+      />
     </Layout>
   );
 }

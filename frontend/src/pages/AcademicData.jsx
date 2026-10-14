@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/Layout';
+import ExportCSVModal from '../components/ExportCSVModal';
 import {
   getAcademicYears,
   getAcademicClasses,
@@ -15,6 +16,7 @@ import {
   MdSchool,
   MdPeople
 } from 'react-icons/md';
+import { downloadCSV, filterRecordsByDateRange, generateExportFilename } from '../utils/csvExport';
 
 export default function AcademicData() {
   // Primary selection states
@@ -45,6 +47,7 @@ export default function AcademicData() {
   const [searchResults, setSearchResults] = useState([]);
   const [toast, setToast] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -244,19 +247,27 @@ export default function AcademicData() {
   }, [filteredResults, searchedEntity]);
 
   // CSV Export
-  const handleExportCSV = () => {
+  const handleExecuteExport = ({ fromDate, fromTime, toDate, toTime, preset }) => {
     if (!filteredResults.length) {
-      showToast('No rows to export. Please adjust filters.');
-      return;
+      return { error: 'No rows to export. Please adjust filters.' };
     }
 
     try {
+      const isDateFiltered = preset !== 'all' && (Boolean(fromDate) || Boolean(toDate));
+      const targetResults = isDateFiltered
+        ? filterRecordsByDateRange(filteredResults, { fromDate, fromTime, toDate, toTime })
+        : filteredResults;
+
+      if (targetResults.length === 0) {
+        return { error: 'No academic records found within the selected date & time range.' };
+      }
+
       let headers = [];
       let rows = [];
 
       if (searchedEntity === 'student') {
         headers = ['#', 'Admission No', 'Student Name', 'Class', 'Section', 'Gender', 'Parent / Guardian', 'Contact', 'Status'];
-        rows = filteredResults.map((s, idx) => [
+        rows = targetResults.map((s, idx) => [
           idx + 1,
           s.admission_no || '',
           s.student_name || '',
@@ -269,7 +280,7 @@ export default function AcademicData() {
         ]);
       } else if (searchedStaffType === 'teaching') {
         headers = ['#', 'Employee ID', 'Name', 'Subject', 'Department', 'Designation', 'Class', 'Section', 'Contact', 'Status'];
-        rows = filteredResults.map((st, idx) => [
+        rows = targetResults.map((st, idx) => [
           idx + 1,
           st.employee_id || '',
           st.name || '',
@@ -283,7 +294,7 @@ export default function AcademicData() {
         ]);
       } else {
         headers = ['#', 'Employee ID', 'Name', 'Department', 'Designation', 'Contact', 'Status'];
-        rows = filteredResults.map((st, idx) => [
+        rows = targetResults.map((st, idx) => [
           idx + 1,
           st.employee_id || '',
           st.name || '',
@@ -294,23 +305,15 @@ export default function AcademicData() {
         ]);
       }
 
-      const csvRows = [headers, ...rows].map((row) =>
-        row.map((val) => `"${String(val ?? '').replace(/"/g, '""')}"`).join(',')
-      );
-      const csvContent = csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `academic_${searchedEntity}_${selectedYear}_${Date.now()}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast('Academic records CSV exported successfully.');
+      const filename = generateExportFilename(`academic_${searchedEntity}_${selectedYear}`, { fromDate, toDate, preset });
+      downloadCSV(filename, headers, rows);
+
+      setShowExportModal(false);
+      showToast(`Academic records CSV exported successfully (${targetResults.length} rows).`);
+      return { success: true };
     } catch (err) {
       console.error('CSV export failed:', err);
-      showToast('Failed to export CSV.');
+      return { error: 'Failed to export CSV.' };
     }
   };
 
@@ -323,8 +326,8 @@ export default function AcademicData() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
               type="button"
-              onClick={handleExportCSV}
-              title="Export CSV"
+              onClick={() => setShowExportModal(true)}
+              title="Export CSV with Custom Time Range"
               className="btn btn-secondary btn-sm"
             >
               <MdDownload /> Export CSV
@@ -334,7 +337,7 @@ export default function AcademicData() {
       }
     >
       {toast && (
-        <div className="alert alert-success" style={{ marginBottom: 16 }}>
+        <div className="alert alert-success alert-toast" style={{ marginBottom: 16 }}>
           <MdCheckCircle style={{ fontSize: 18, flexShrink: 0 }} />
           <span>{toast}</span>
         </div>
@@ -729,6 +732,16 @@ export default function AcademicData() {
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Select an Entity and Academic Year above to view records.</p>
         </div>
       )}
+
+      {/* Export CSV Modal */}
+      <ExportCSVModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Academic Records"
+        isAttendance={false}
+        records={filteredResults}
+        onExport={handleExecuteExport}
+      />
     </Layout>
   );
 }

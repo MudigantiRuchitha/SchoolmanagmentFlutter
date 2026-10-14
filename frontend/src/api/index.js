@@ -49,6 +49,7 @@ superApi.interceptors.response.use(
 
 // Auth
 export const loginAdmin = (data) => api.post('/auth/login', data);
+export const logoutUser = () => api.post('/auth/logout');
 export const changePassword = (data) => api.post('/auth/change-password', data);
 export const getMe = () => api.get('/auth/me');
 

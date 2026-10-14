@@ -1,12 +1,42 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
+import ExportCSVModal from '../components/ExportCSVModal';
 import { getStaffAttendance, markStaffAttendance, getBranches } from '../api';
-import { MdSave, MdFilterList, MdAccessTime, MdSearch, MdDownload, MdFingerprint } from 'react-icons/md';
+import { MdSave, MdFilterList, MdAccessTime, MdSearch, MdDownload, MdFingerprint, MdCheckCircle, MdFlashOn } from 'react-icons/md';
 import { format } from 'date-fns';
 import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
+import { useAuth } from '../context/AuthContext';
+import { downloadCSV } from '../utils/csvExport';
+
+const formatTime12 = (timeStr) => {
+  if (!timeStr) return '—';
+  const clean = String(timeStr).slice(0, 5);
+  const [h, m] = clean.split(':');
+  if (h === undefined || m === undefined) return timeStr;
+  const hourNum = parseInt(h, 10);
+  const ampm = hourNum >= 12 ? 'PM' : 'AM';
+  const formattedHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
+  return `${formattedHour}:${m} ${ampm}`;
+};
+
+const timeToMinutes = (timeStr) => {
+  if (!timeStr) return 0;
+  const parts = String(timeStr).trim().split(':');
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
+  return h * 60 + m;
+};
+
+const checkIsLate = (checkInTime, expectedCheckIn) => {
+  if (!checkInTime) return false;
+  const inMins = timeToMinutes(checkInTime);
+  const expMins = timeToMinutes(expectedCheckIn || '09:00');
+  return inMins > expMins;
+};
 
 export default function StaffAttendance() {
+  const { isReadOnly } = useAuth();
   const [records, setRecords] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -18,6 +48,10 @@ export default function StaffAttendance() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [changes, setChanges] = useState({});
+
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Punches Modal State
   const [showPunchesModal, setShowPunchesModal] = useState(false);
@@ -49,7 +83,7 @@ export default function StaffAttendance() {
   const getVal = (record, field) => {
     const ch = changes[record.id];
     if (ch && ch[field] !== undefined) return ch[field];
-    if (field === 'status') return record.status || 'absent';
+    if (field === 'status') return record.status || '';
     if (field === 'check_in') return record.check_in || '';
     if (field === 'check_out') return record.check_out || '';
     return '';
@@ -60,21 +94,32 @@ export default function StaffAttendance() {
   };
 
   const markAll = (status) => {
-    const nc = {};
-    records.forEach(r => { nc[r.id] = { status }; });
+    const nc = { ...changes };
+    records.forEach(r => { nc[r.id] = { ...nc[r.id], status }; });
     setChanges(nc);
   };
+
 
   const handleSave = async () => {
     setSaving(true);
     try {
       const recs = records.map(r => {
         const ch = changes[r.id] || {};
+        const checkInVal = ch.check_in !== undefined ? ch.check_in : (r.check_in || null);
+        let statusVal = ch.status !== undefined ? ch.status : (r.status || '');
+
+        if (checkInVal) {
+          const isLate = checkIsLate(checkInVal, r.expected_check_in || '09:00');
+          if (isLate && (!statusVal || statusVal === 'present')) {
+            statusVal = 'late';
+          }
+        }
+
         return { 
           staffId: r.id, 
           date, 
-          status: ch.status || r.status || 'absent', 
-          checkIn: ch.check_in !== undefined ? ch.check_in : (r.check_in || null), 
+          status: statusVal, 
+          checkIn: checkInVal, 
           checkOut: ch.check_out !== undefined ? ch.check_out : (r.check_out || null), 
           mode: 'manual' 
         };
@@ -86,29 +131,92 @@ export default function StaffAttendance() {
     setSaving(false);
   };
 
-  const exportCSV = () => {
+  const handleExecuteExport = async ({ fromDate, fromTime, toDate, toTime, reportType, preset }) => {
+    setExporting(true);
     try {
-      if (!records || records.length === 0) {
-        showToast('No rows to export. No staff attendance records are available for this selection.');
-        return;
+      let exportRows = [];
+      let headers = [];
+      let filename = `staff_attendance_${fromDate || 'all'}_to_${toDate || 'all'}.csv`;
+
+      if (preset === 'today' && fromDate === date && toDate === date && reportType === 'detailed' && records.length > 0) {
+        headers = ['Date', 'Staff ID', 'Staff Name', 'Role', 'Designation', 'Branch', 'School Check In', 'School Check Out', 'Actual Check In', 'Actual Check Out', 'Status'];
+        exportRows = filteredRecords.map(r => [
+          date,
+          r.staff_id || '',
+          `"${r.full_name}"`,
+          r.role_type,
+          `"${r.designation || ''}"`,
+          `"${r.branch_name || ''}"`,
+          r.expected_check_in || '09:00',
+          r.expected_check_out || '17:00',
+          getVal(r, 'check_in'),
+          getVal(r, 'check_out'),
+          getVal(r, 'status')
+        ]);
+        filename = `staff_attendance_${date}.csv`;
+      } else {
+        const params = {
+          from_date: fromDate || '2000-01-01',
+          to_date: toDate || '2099-12-31',
+          from_time: fromTime || '00:00',
+          to_time: toTime || '23:59',
+          report_type: reportType
+        };
+        if (branchId) params.branch_id = branchId;
+        if (roleType) params.role_type = roleType;
+
+        const res = await getStaffAttendance(params);
+        const data = res.data?.records || [];
+
+        if (data.length === 0) {
+          setExporting(false);
+          return { error: 'No staff attendance records found for the selected date & time range.' };
+        } else if (reportType === 'detailed') {
+          headers = ['Date', 'Staff ID', 'Staff Name', 'Role', 'Designation', 'Branch', 'School Check In', 'School Check Out', 'Actual Check In', 'Actual Check Out', 'Status'];
+          exportRows = data.map(r => [
+            r.date || '',
+            r.staff_id || '',
+            r.full_name || '',
+            r.role_type || '',
+            r.designation || '',
+            r.branch_name || '',
+            r.expected_check_in || '09:00',
+            r.expected_check_out || '17:00',
+            r.check_in || '',
+            r.check_out || '',
+            r.status || ''
+          ]);
+          filename = `staff_attendance_detailed_${fromDate || 'all'}_to_${toDate || 'all'}.csv`;
+        } else {
+          headers = ['Staff ID', 'Staff Name', 'Role', 'Branch', 'Total Days', 'Present Days', 'Absent Days', 'Attendance %'];
+          exportRows = data.map(r => {
+            const tot = Number(r.total_days || 0);
+            const pres = Number(r.present_days || 0);
+            const pct = tot > 0 ? ((pres / tot) * 100).toFixed(1) + '%' : '0%';
+            return [
+              r.staff_id || '',
+              r.full_name || '',
+              r.role_type || '',
+              r.branch_name || '',
+              tot,
+              pres,
+              Number(r.absent_days || 0),
+              pct
+            ];
+          });
+          filename = `staff_attendance_summary_${fromDate || 'all'}_to_${toDate || 'all'}.csv`;
+        }
       }
 
-      const headers = ['Date', 'Staff ID', 'Staff Name', 'Role', 'Branch', 'Check In', 'Check Out', 'Status'];
-      const rows = records.map(r => [
-        date, r.staff_id || '', `"${r.full_name}"`, r.role_type, `"${r.branch_name || ''}"`, getVal(r, 'check_in'), getVal(r, 'check_out'), getVal(r, 'status')
-      ]);
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `staff_attendance_${date}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Staff attendance CSV exported successfully.');
-    } catch (error) {
-      console.error('Staff attendance CSV export failed:', error);
-      showToast('CSV export failed. Please try again.');
+      downloadCSV(filename, headers, exportRows);
+      setShowExportModal(false);
+      showToast(`Staff attendance CSV exported successfully (${exportRows.length} rows).`);
+      return { success: true };
+    } catch (err) {
+      console.error(err);
+      return { error: 'Failed to export staff attendance.' };
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -117,7 +225,11 @@ export default function StaffAttendance() {
       r.full_name.toLowerCase().includes(search.toLowerCase()) || 
       (r.staff_id || '').toLowerCase().includes(search.toLowerCase());
     const currentStatus = getVal(r, 'status');
-    const matchesStatus = !statusFilter || currentStatus === statusFilter;
+    const matchesStatus = !statusFilter 
+      ? true 
+      : statusFilter === 'not_marked' 
+        ? !currentStatus 
+        : currentStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -135,18 +247,64 @@ export default function StaffAttendance() {
       subtitle="Mark, check-in, check-out, view biometric punches and manage staff daily attendance"
       headerRight={
         records.length > 0 && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export CSV">
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)} title="Export CSV with Custom Time Range">
               <MdDownload /> Export CSV
             </button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              <MdSave /> {saving ? 'Saving...' : 'Save Attendance'}
-            </button>
+            {!isReadOnly && (
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                <MdSave /> {saving ? 'Saving...' : 'Save Attendance'}
+              </button>
+            )}
+            {isReadOnly && (
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600, padding: '5px 10px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                Only Read (Viewer Mode)
+              </span>
+            )}
           </div>
         )
       }
     >
-      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
+      {toast && <div className="alert alert-success alert-toast"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
+
+      {/* School Timing Banner */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)',
+          border: '1px solid #bfdbfe',
+          borderRadius: 12,
+          padding: '14px 20px',
+          marginBottom: 18,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}
+      >
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: '#3b82f6',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
+            flexShrink: 0
+          }}
+        >
+          <MdAccessTime size={22} />
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a8a' }}>
+            Staff School Timings (Arrival & Departure Hours)
+          </div>
+          <div style={{ fontSize: 12, color: '#3b82f6' }}>
+            Check-in and check-out are recorded automatically from staff login & logout. If staff check in after school hours, their status is automatically set to <strong>Late</strong>.
+          </div>
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -179,18 +337,20 @@ export default function StaffAttendance() {
             />
           </div>
 
-          <select className="input" style={{ width: 130, padding: '7px 10px', fontSize: 13 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
             <option value="present">Present</option>
             <option value="absent">Absent</option>
             <option value="late">Late</option>
             <option value="half-day">Half Day</option>
+            <option value="not_marked">Not Marked (Blank)</option>
           </select>
 
           {records.length > 0 && (
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-sm btn-success" onClick={() => markAll('present')}>✓ All Present</button>
               <button className="btn btn-sm btn-danger" onClick={() => markAll('absent')}>✗ All Absent</button>
+              <button className="btn btn-sm btn-secondary" onClick={() => markAll('')}>Clear All</button>
             </div>
           )}
         </div>
@@ -217,10 +377,10 @@ export default function StaffAttendance() {
       {loading ? <div className="loading-overlay"><div className="spinner" /> Loading staff attendance...</div> : (
         <div className="table-container">
           <table>
-            <thead><tr><th>Staff ID</th><th>Name & Designation</th><th>Role</th><th>Branch</th><th>Check In</th><th>Check Out</th><th>Status</th><th>Punches</th></tr></thead>
+            <thead><tr><th>Staff ID</th><th>Name & Designation</th><th>Role</th><th>Branch</th><th>School Hours</th><th>Check In</th><th>Check Out</th><th>Status</th><th>Punches</th></tr></thead>
             <tbody>
               {filteredRecords.length === 0 ? (
-                <tr><td colSpan={8}><div className="empty-state"><div className="empty-state-icon"><MdAccessTime /></div><div className="empty-state-title">No staff attendance records</div></div></td></tr>
+                <tr><td colSpan={9}><div className="empty-state"><div className="empty-state-icon"><MdAccessTime /></div><div className="empty-state-title">No staff attendance records</div></div></td></tr>
               ) : filteredRecords.map(r => {
                 const inTime = getVal(r, 'check_in');
                 const outTime = getVal(r, 'check_out');
@@ -230,14 +390,73 @@ export default function StaffAttendance() {
                     <td><div style={{ fontWeight: 600 }}>{r.full_name}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.designation}</div></td>
                     <td><span className={`badge ${r.role_type === 'teaching' ? 'badge-info' : r.role_type === 'management' ? 'badge-purple' : 'badge-warning'}`}>{r.role_type}</span></td>
                     <td style={{ fontSize: 13 }}>{r.branch_name || '—'}</td>
-                    <td><input type="time" className="input" style={{ width: 120, padding: '5px 8px', fontSize: 13 }} value={inTime} onChange={(e) => updateChange(r.id, 'check_in', e.target.value)} /></td>
-                    <td><input type="time" className="input" style={{ width: 120, padding: '5px 8px', fontSize: 13 }} value={outTime} onChange={(e) => updateChange(r.id, 'check_out', e.target.value)} /></td>
                     <td>
-                      <select className="input" style={{ padding: '6px 10px', fontSize: 13, width: 120, 
-                        background: getVal(r, 'status') === 'present' ? '#f0fdf4' : getVal(r, 'status') === 'absent' ? '#fef2f2' : getVal(r, 'status') === 'late' ? '#fffbeb' : '#faf5ff',
-                        color: getVal(r, 'status') === 'present' ? '#15803d' : getVal(r, 'status') === 'absent' ? '#dc2626' : getVal(r, 'status') === 'late' ? '#d97706' : '#7e22ce', 
-                        fontWeight: 700 }}
-                        value={getVal(r, 'status')} onChange={(e) => updateChange(r.id, 'status', e.target.value)}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', background: '#f1f5f9', borderRadius: 6, fontSize: 12, fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }} title="Expected School Timings">
+                        <MdAccessTime size={13} style={{ color: '#4f46e5' }} />
+                        {formatTime12(r.expected_check_in || '09:00')} – {formatTime12(r.expected_check_out || '17:00')}
+                      </div>
+                    </td>
+                    <td>
+                      <div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: inTime ? 700 : 500, 
+                          color: inTime 
+                            ? (checkIsLate(inTime, r.expected_check_in || '09:00') ? '#b45309' : '#0f172a') 
+                            : 'var(--text-muted, #94a3b8)' 
+                        }}>
+                          {inTime ? formatTime12(inTime) : '—'}
+                          {inTime && checkIsLate(inTime, r.expected_check_in || '09:00') && (
+                            <span 
+                              style={{ 
+                                marginLeft: 6, 
+                                fontSize: 10, 
+                                padding: '2px 6px', 
+                                background: '#fef3c7', 
+                                color: '#b45309', 
+                                borderRadius: 4, 
+                                fontWeight: 700 
+                              }}
+                            >
+                              Late
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Exp: {formatTime12(r.expected_check_in || '09:00')}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: outTime ? 700 : 500, 
+                          color: outTime ? '#0f172a' : 'var(--text-muted, #94a3b8)' 
+                        }}>
+                          {outTime ? formatTime12(outTime) : '—'}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Exp: {formatTime12(r.expected_check_out || '17:00')}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <select 
+                        className="input" 
+                        style={{ 
+                          padding: '6px 10px', 
+                          fontSize: 13, 
+                          width: 125, 
+                          background: getVal(r, 'status') === 'present' ? '#f0fdf4' : getVal(r, 'status') === 'absent' ? '#fef2f2' : getVal(r, 'status') === 'late' ? '#fffbeb' : getVal(r, 'status') === 'half-day' ? '#faf5ff' : 'var(--bg, #ffffff)',
+                          color: getVal(r, 'status') === 'present' ? '#15803d' : getVal(r, 'status') === 'absent' ? '#dc2626' : getVal(r, 'status') === 'late' ? '#d97706' : getVal(r, 'status') === 'half-day' ? '#7e22ce' : 'var(--text-muted, #94a3b8)', 
+                          fontWeight: getVal(r, 'status') ? 700 : 400 
+                        }}
+                        value={getVal(r, 'status')} 
+                        disabled={isReadOnly}
+                        onChange={(e) => updateChange(r.id, 'status', e.target.value)}
+                      >
+                        <option value="">—---—</option>
                         <option value="present">Present</option>
                         <option value="absent">Absent</option>
                         <option value="late">Late</option>
@@ -280,6 +499,9 @@ export default function StaffAttendance() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-main)' }}>{punchStaffRecord.full_name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                   Staff ID: <strong>{punchStaffRecord.staff_id || '—'}</strong> | Branch: <strong>{punchStaffRecord.branch_name || 'Main Branch'}</strong>
+                </div>
+                <div style={{ fontSize: 12, color: '#4338ca', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <MdAccessTime size={14} /> Expected School Hours: <strong>{formatTime12(punchStaffRecord.expected_check_in || '09:00')} – {formatTime12(punchStaffRecord.expected_check_out || '17:00')}</strong>
                 </div>
               </div>
             </div>
@@ -332,6 +554,16 @@ export default function StaffAttendance() {
           </div>
         )}
       </Modal>
+
+      {/* Export CSV Modal */}
+      <ExportCSVModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Staff Attendance"
+        isAttendance={true}
+        loading={exporting}
+        onExport={handleExecuteExport}
+      />
     </Layout>
   );
 }

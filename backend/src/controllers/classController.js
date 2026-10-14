@@ -7,7 +7,8 @@ async function getClasses(req, res) {
   try {
     const [staffRows] = await db.query(
       `SELECT id, staff_id FROM staff 
-       WHERE id::text = $1::text OR staff_id = $1::text OR LOWER(username) = LOWER($1::text)`,
+       WHERE (id::text = $1::text OR staff_id = $1::text OR LOWER(username) = LOWER($1::text))
+         AND (is_deleted IS NOT TRUE)`,
       [String(teacherId)]
     );
 
@@ -19,6 +20,7 @@ async function getClasses(req, res) {
        FROM classes c
        LEFT JOIN staff s ON (s.id = c.teacher_id OR s.id = ANY(c.teacher_ids))
        WHERE (c.is_active = true OR c.is_active IS NULL)
+         AND (c.is_deleted IS NOT TRUE)
          AND (
            c.teacher_id = ANY($1::int[])
            OR c.teacher_id::text = ANY($2::text[])
@@ -60,9 +62,10 @@ async function getTeacherPeriods(req, res) {
     const [staffRows] = await db.query(
       `SELECT id, staff_id, org_id, username
        FROM staff
-       WHERE id::text = $1::text
+       WHERE (id::text = $1::text
           OR staff_id = $1::text
-          OR LOWER(username) = LOWER($1::text)
+          OR LOWER(username) = LOWER($1::text))
+          AND (is_deleted IS NOT TRUE)
        LIMIT 1`,
       [teacherId]
     );
@@ -179,11 +182,12 @@ async function getDeviceUserClasses(req, res) {
       // Query classes matching any of the teacher identifiers with student_count
       const [classQueryRows] = await db.query(
         `SELECT DISTINCT c.*, b.name as branch_name,
-           (SELECT COUNT(*) FROM students st WHERE (st.class_id = c.id OR st.class_id::text = c.id::text) AND (st.is_active = true OR st.is_active IS NULL)) as student_count
+           (SELECT COUNT(*) FROM students st WHERE (st.class_id = c.id OR st.class_id::text = c.id::text) AND (st.is_active = true OR st.is_active IS NULL) AND (st.is_deleted IS NOT TRUE)) as student_count
          FROM classes c
          LEFT JOIN branches b ON b.id = c.branch_id
          LEFT JOIN staff s ON (s.id = c.teacher_id OR s.id = ANY(c.teacher_ids))
          WHERE (c.is_active = true OR c.is_active IS NULL)
+           AND (c.is_deleted IS NOT TRUE)
            AND (
              c.teacher_id = ANY($1::int[])
              OR c.teacher_id::text = ANY($2::text[])
@@ -204,10 +208,11 @@ async function getDeviceUserClasses(req, res) {
       // Fallback: Query all active classes with student_count
       const [allClasses] = await db.query(
         `SELECT c.*, b.name as branch_name,
-           (SELECT COUNT(*) FROM students st WHERE (st.class_id = c.id OR st.class_id::text = c.id::text) AND (st.is_active = true OR st.is_active IS NULL)) as student_count
+           (SELECT COUNT(*) FROM students st WHERE (st.class_id = c.id OR st.class_id::text = c.id::text) AND (st.is_active = true OR st.is_active IS NULL) AND (st.is_deleted IS NOT TRUE)) as student_count
          FROM classes c
          LEFT JOIN branches b ON b.id = c.branch_id
          WHERE (c.is_active = true OR c.is_active IS NULL)
+           AND (c.is_deleted IS NOT TRUE)
          ORDER BY c.name`
       );
       rows = allClasses;

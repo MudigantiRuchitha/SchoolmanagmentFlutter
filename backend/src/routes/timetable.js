@@ -45,7 +45,7 @@ router.get('/org-default', authMiddleware, async (req, res) => {
   try {
     const orgId = req.admin.orgId;
     const slotsRes = await pool.query(
-      `SELECT * FROM timetable_slots WHERE class_id IS NULL AND org_id = $1 ORDER BY slot_number`,
+      `SELECT * FROM timetable_slots WHERE class_id IS NULL AND org_id = $1 AND (is_deleted IS NOT TRUE) ORDER BY slot_number`,
       [orgId]
     );
 
@@ -110,7 +110,7 @@ router.post('/org-default', authMiddleware, async (req, res) => {
     }
 
     await client.query('BEGIN');
-    await client.query('DELETE FROM timetable_slots WHERE class_id IS NULL AND org_id = $1', [orgId]);
+    await client.query('UPDATE timetable_slots SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE class_id IS NULL AND org_id = $1 AND (is_deleted IS NOT TRUE)', [orgId]);
 
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
@@ -158,7 +158,7 @@ router.get('/settings/:classId', authMiddleware, async (req, res) => {
       `SELECT t.*, st.full_name as teacher_name 
        FROM timetable_slots t 
        LEFT JOIN staff st ON st.id = t.teacher_id 
-       WHERE t.class_id = $1 AND t.org_id = $2 
+       WHERE t.class_id = $1 AND t.org_id = $2 AND (t.is_deleted IS NOT TRUE)
        ORDER BY t.slot_number, t.start_time`,
       [classId, orgId]
     );
@@ -168,7 +168,7 @@ router.get('/settings/:classId', authMiddleware, async (req, res) => {
     // If class has no custom slots and mode is MORNING_EVENING, fetch org-default slots dynamically from DB
     if (slots.length === 0 && attendanceMode === 'MORNING_EVENING') {
       const defaultRes = await pool.query(
-        `SELECT * FROM timetable_slots WHERE class_id IS NULL AND org_id = $1 ORDER BY slot_number`,
+        `SELECT * FROM timetable_slots WHERE class_id IS NULL AND org_id = $1 AND (is_deleted IS NOT TRUE) ORDER BY slot_number`,
         [orgId]
       );
       slots = defaultRes.rows;
@@ -213,8 +213,8 @@ router.post('/settings/:classId', authMiddleware, async (req, res) => {
       [orgId, classId, attendanceMode]
     );
 
-    // 2. Clear old slots for this class
-    await client.query('DELETE FROM timetable_slots WHERE class_id = $1 AND org_id = $2', [classId, orgId]);
+    // 2. Soft-delete old slots for this class
+    await client.query('UPDATE timetable_slots SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE class_id = $1 AND org_id = $2 AND (is_deleted IS NOT TRUE)', [classId, orgId]);
 
     // 3. Insert new timetable slots
     for (let i = 0; i < slots.length; i++) {
@@ -251,7 +251,7 @@ router.post('/settings/:classId', authMiddleware, async (req, res) => {
 router.delete('/slot/:slotId', authMiddleware, async (req, res) => {
   try {
     const slotId = req.params.slotId;
-    await pool.query('DELETE FROM timetable_slots WHERE id = $1 AND org_id = $2', [slotId, req.admin.orgId]);
+    await pool.query('UPDATE timetable_slots SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [slotId, req.admin.orgId]);
     res.json({ success: true, message: 'Timetable slot deleted.' });
   } catch (err) {
     console.error('Error deleting timetable slot:', err);
@@ -281,6 +281,7 @@ router.get('/periods', authMiddleware, async (req, res) => {
         AND ($2::int IS NULL OR teacher_id = $2)
         AND ($3::int IS NULL OR class_id = $3)
         AND is_active = true
+        AND (is_deleted IS NOT TRUE)
       ORDER BY slot_number`;
     const params = [orgId, staffId, classId];
     let result = await pool.query(baseQuery, params);
@@ -298,6 +299,7 @@ router.get('/periods', authMiddleware, async (req, res) => {
           AND ($2::int IS NULL OR teacher_id = $2)
           AND class_id IS NULL
           AND is_active = true
+          AND (is_deleted IS NOT TRUE)
         ORDER BY slot_number`;
       result = await pool.query(fallbackQuery, [orgId, staffId]);
     }

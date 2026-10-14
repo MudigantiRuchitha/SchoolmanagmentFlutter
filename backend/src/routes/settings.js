@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // GET /api/settings
 router.get('/', authMiddleware, async (req, res) => {
@@ -21,7 +21,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // PUT /api/settings
-router.put('/', authMiddleware, async (req, res) => {
+router.put('/', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     const { name, domain, logoUrl, address, phone, email } = req.body;
     const result = await pool.query(

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { MdNotifications, MdClose } from 'react-icons/md';
+import { MdNotifications, MdClose, MdMenu } from 'react-icons/md';
 
-export default function Header({ title, subtitle, right }) {
+export default function Header({ title, subtitle, right, onToggleMobileNav }) {
   const { org } = useAuth();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -120,31 +120,46 @@ export default function Header({ title, subtitle, right }) {
   };
 
   return (
-    <header className="header">
+    <>
+      <header className="header">
 
-      {/* =====================================================
-          LEFT SIDE
-      ====================================================== */}
-      <div className="header-left">
-        <div>
-          <div className="page-title">
-            {title}
+        {/* =====================================================
+            LEFT SIDE
+        ====================================================== */}
+        <div className="header-left">
+          <button
+            type="button"
+            className="mobile-nav-toggle"
+            onClick={onToggleMobileNav}
+            aria-label="Open Navigation Menu"
+            title="Open Navigation Menu"
+          >
+            <MdMenu size={22} />
+          </button>
+
+          <div className="header-title-container">
+            <div className="page-title">
+              {title}
+            </div>
+
+            {subtitle && (
+              <div className="page-subtitle">
+                {subtitle}
+              </div>
+            )}
           </div>
+        </div>
 
-          {subtitle && (
-            <div className="page-subtitle">
-              {subtitle}
+        {/* =====================================================
+            RIGHT SIDE
+        ====================================================== */}
+        <div className="header-right">
+
+          {right && (
+            <div className="header-desktop-actions">
+              {right}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* =====================================================
-          RIGHT SIDE
-      ====================================================== */}
-      <div className="header-right">
-
-        {right}
 
         {/* ===================================================
             NOTIFICATION BELL
@@ -588,6 +603,8 @@ export default function Header({ title, subtitle, right }) {
             ORGANIZATION
         ==================================================== */}
         <div
+          className="header-org-badge"
+          title={org?.name ? `${org.name} (${org?.code?.toUpperCase()})` : 'Organisation'}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -595,9 +612,11 @@ export default function Header({ title, subtitle, right }) {
             padding: '6px 12px',
             background: 'rgba(99,102,241,0.08)',
             borderRadius: 'var(--radius-sm)',
+            flexShrink: 0,
           }}
         >
           <div
+            className="header-org-avatar"
             style={{
               width: '24px',
               height: '24px',
@@ -611,16 +630,19 @@ export default function Header({ title, subtitle, right }) {
               fontSize: '11px',
               fontWeight: 700,
               color: '#ffffff',
+              flexShrink: 0,
             }}
           >
             {org?.code?.slice(0, 2).toUpperCase()}
           </div>
 
           <span
+            className="header-org-name"
             style={{
               fontSize: '13px',
               fontWeight: 600,
               color: 'var(--primary)',
+              whiteSpace: 'nowrap',
             }}
           >
             {org?.name}
@@ -629,5 +651,13 @@ export default function Header({ title, subtitle, right }) {
 
       </div>
     </header>
-  );
+
+    {/* Mobile Action Buttons Strip */}
+    {right && (
+      <div className="header-mobile-actions">
+        {right}
+      </div>
+    )}
+  </>
+);
 }

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import ClassSectionSelect from '../components/ClassSectionSelect';
+import ExportCSVModal from '../components/ExportCSVModal';
 import { getStudentAttendance, markStudentAttendance, getBranches, getClasses } from '../api';
 import { MdSave, MdFilterList, MdSearch, MdDownload, MdCheckCircle, MdCancel } from 'react-icons/md';
 import { format } from 'date-fns';
 import { filterBranches, getBranchScope, isDedicatedBranchUser } from '../utils/branchScope';
+import { useAuth } from '../context/AuthContext';
+import { downloadCSV } from '../utils/csvExport';
 
 export default function StudentAttendance() {
+  const { isReadOnly } = useAuth();
   const [records, setRecords] = useState([]);
   const [periodRecords, setPeriodRecords] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -22,6 +26,8 @@ export default function StudentAttendance() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [changes, setChanges] = useState({});
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -72,10 +78,16 @@ export default function StudentAttendance() {
   const getVal = (record, field) => {
     const ch = changes[record.id];
     if (ch && ch[field] !== undefined) return ch[field];
-    if (field === 'status') return record.status || 'absent';
+    if (field === 'status') return record.status || '';
     if (field === 'check_in') return record.check_in || '';
     if (field === 'check_out') return record.check_out || '';
     return '';
+  };
+
+  const markAll = (status) => {
+    const nc = { ...changes };
+    records.forEach(r => { nc[r.id] = { ...nc[r.id], status }; });
+    setChanges(nc);
   };
 
   const handleSave = async () => {
@@ -86,7 +98,7 @@ export default function StudentAttendance() {
         return {
           studentId: r.id,
           date,
-          status: ch.status || r.status || 'absent',
+          status: ch.status !== undefined ? ch.status : (r.status || ''),
           checkIn: ch.check_in !== undefined ? ch.check_in : (r.check_in || null),
           checkOut: ch.check_out !== undefined ? ch.check_out : (r.check_out || null),
           mode: 'manual',
@@ -99,67 +111,135 @@ export default function StudentAttendance() {
     setSaving(false);
   };
 
-  const exportCSV = () => {
+  const filteredDailyRecords = records.filter(record => {
+    const term = (search || '').trim().toLowerCase();
+    const hitsText = !term || `${record.full_name || ''} ${record.admission_no || ''} ${record.roll_no || ''} ${record.branch_name || ''} ${record.class_name || ''} ${record.section || ''}`.toLowerCase().includes(term);
+    const recStatus = getVal(record, 'status');
+    const hitsStatus = !statusFilter ? true : statusFilter === 'not_marked' ? !recStatus : recStatus === statusFilter;
+    return hitsText && hitsStatus;
+  });
+
+  const handleExecuteExport = async ({ fromDate, fromTime, toDate, toTime, reportType, preset }) => {
+    setExporting(true);
     try {
-      const flatRows = renderedPeriods.flatMap(periodKey => {
-        const group = periodGroups[periodKey] || [];
-        const periodClassGroups = group.reduce((acc, record) => {
-          const classKey = `${record.class_name || ''} ${record.section || ''}`.trim() || 'Unassigned Class';
-          acc[classKey] ||= [];
-          acc[classKey].push(record);
-          return acc;
-        }, {});
+      let exportRows = [];
+      let headers = [];
+      let filename = `student_attendance_${fromDate || 'all'}_to_${toDate || 'all'}.csv`;
 
-        return Object.keys(periodClassGroups).sort().flatMap(classKey => {
-          const classRows = periodClassGroups[classKey] || [];
-          return classRows.filter(record => {
-            const term = (search || '').trim().toLowerCase();
-            const hitsText = !term || `${record.full_name || ''} ${record.admission_no || ''} ${record.roll_no || ''} ${record.branch_name || ''} ${record.class_name || ''} ${record.section || ''}`.toLowerCase().includes(term);
-            const hitsStatus = !statusFilter || (record.status || 'absent') === statusFilter;
-            return hitsText && hitsStatus;
+      if (preset === 'today' && fromDate === date && toDate === date && reportType === 'detailed' && records.length > 0) {
+        if (renderedPeriods.length > 0) {
+          headers = ['Date', 'Period', 'Class', 'Admission No', 'Student Name', 'Roll No', 'Branch', 'Punch Time', 'Status'];
+          const flatRows = renderedPeriods.flatMap(periodKey => {
+            const group = periodGroups[periodKey] || [];
+            const periodClassGroups = group.reduce((acc, record) => {
+              const classKey = `${record.class_name || ''} ${record.section || ''}`.trim() || 'Unassigned Class';
+              acc[classKey] ||= [];
+              acc[classKey].push(record);
+              return acc;
+            }, {});
+
+            return Object.keys(periodClassGroups).sort().flatMap(classKey => {
+              const classRows = periodClassGroups[classKey] || [];
+              return classRows.filter(record => {
+                const term = (search || '').trim().toLowerCase();
+                const hitsText = !term || `${record.full_name || ''} ${record.admission_no || ''} ${record.roll_no || ''} ${record.branch_name || ''} ${record.class_name || ''} ${record.section || ''}`.toLowerCase().includes(term);
+                const recStatus = record.status || '';
+                const hitsStatus = !statusFilter ? true : statusFilter === 'not_marked' ? !recStatus : recStatus === statusFilter;
+                return hitsText && hitsStatus;
+              });
+            });
           });
-        });
-      });
 
-      if (flatRows.length === 0) {
-        showToast('No rows to export for the current filters. Please adjust the filters or date selection.');
-        return;
+          exportRows = flatRows.map(r => [
+            date,
+            String(r.period_number ?? r.period_name ?? 'Unassigned'),
+            `${r.class_name || ''} ${r.section || ''}`.trim(),
+            r.admission_no || '',
+            `"${r.full_name || ''}"`,
+            r.roll_no || '',
+            `"${r.branch_name || ''}"`,
+            r.check_in || '',
+            r.status || ''
+          ]);
+        } else {
+          headers = ['Date', 'Daily/Session', 'Class', 'Admission No', 'Student Name', 'Roll No', 'Branch', 'Check In', 'Status'];
+          exportRows = filteredDailyRecords.map(r => [
+            date,
+            'Daily',
+            `${r.class_name || ''} ${r.section || ''}`.trim(),
+            r.admission_no || '',
+            `"${r.full_name || ''}"`,
+            r.roll_no || '',
+            `"${r.branch_name || ''}"`,
+            getVal(r, 'check_in') || '',
+            getVal(r, 'status') || ''
+          ]);
+        }
+        filename = `student_attendance_${date}.csv`;
+      } else {
+        const params = {
+          from_date: fromDate || '2000-01-01',
+          to_date: toDate || '2099-12-31',
+          from_time: fromTime || '00:00',
+          to_time: toTime || '23:59',
+          report_type: reportType
+        };
+        if (branchId) params.branch_id = branchId;
+        if (classId) params.class_id = classId;
+
+        const res = await getStudentAttendance(params);
+        const data = res.data?.records || [];
+
+        if (data.length === 0) {
+          setExporting(false);
+          return { error: 'No student attendance records found for the selected date & time range.' };
+        } else if (reportType === 'detailed') {
+          headers = ['Date', 'Admission No', 'Student Name', 'Roll No', 'Class', 'Section', 'Branch', 'Check In', 'Check Out', 'Status'];
+          exportRows = data.map(r => [
+            r.date || '',
+            r.admission_no || '',
+            r.full_name || '',
+            r.roll_no || '',
+            r.class_name || '',
+            r.section || '',
+            r.branch_name || '',
+            r.check_in || '',
+            r.check_out || '',
+            r.status || ''
+          ]);
+          filename = `student_attendance_detailed_${fromDate || 'all'}_to_${toDate || 'all'}.csv`;
+        } else {
+          headers = ['Admission No', 'Student Name', 'Roll No', 'Class', 'Section', 'Branch', 'Total Days', 'Present Days', 'Absent Days', 'Late Days', 'Attendance %'];
+          exportRows = data.map(r => {
+            const tot = Number(r.total_days || 0);
+            const pres = Number(r.present_days || 0);
+            const pct = tot > 0 ? ((pres / tot) * 100).toFixed(1) + '%' : '0%';
+            return [
+              r.admission_no || '',
+              r.full_name || '',
+              r.roll_no || '',
+              r.class_name || '',
+              r.section || '',
+              r.branch_name || '',
+              tot,
+              pres,
+              Number(r.absent_days || 0),
+              Number(r.late_days || 0),
+              pct
+            ];
+          });
+          filename = `student_attendance_summary_${fromDate || 'all'}_to_${toDate || 'all'}.csv`;
+        }
       }
 
-      const headers = ['Date', 'Period', 'Class', 'Admission No', 'Student Name', 'Roll No', 'Branch', 'Punch Time', 'Status'];
-      const rows = flatRows.map(r => [
-        date,
-        String(r.period_number ?? r.period_name ?? 'Unassigned'),
-        `${r.class_name || ''} ${r.section || ''}`.trim(),
-        r.admission_no || '',
-        r.full_name || '',
-        r.roll_no || '',
-        r.branch_name || '',
-        r.check_in || '—',
-        r.status || 'present'
-      ]);
-
-      const csvRows = [headers, ...rows].map(row => {
-        return row.map(value => {
-          const safeValue = String(value ?? '');
-          return `"${safeValue.replace(/"/g, '""')}"`;
-        }).join(',');
-      });
-
-      const csvContent = csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `student_attendance_${date}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast('Student attendance CSV exported successfully.');
+      setShowExportModal(false);
+      showToast(`Student attendance CSV exported successfully (${exportRows.length} rows).`);
+      return { success: true };
     } catch (error) {
       console.error('Student attendance CSV export failed:', error);
-      showToast('CSV export failed. Please try again.');
+      return { error: 'CSV export failed. Please try again.' };
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -213,18 +293,25 @@ export default function StudentAttendance() {
       subtitle="Mark, update, and manage student daily attendance"
       headerRight={
         records.length > 0 && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-secondary btn-sm" onClick={exportCSV} title="Export CSV">
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)} title="Export CSV with Custom Time Range">
               <MdDownload /> Export CSV
             </button>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              <MdSave /> {saving ? 'Saving...' : 'Save Attendance'}
-            </button>
+            {!isReadOnly && (
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                <MdSave /> {saving ? 'Saving...' : 'Save Attendance'}
+              </button>
+            )}
+            {isReadOnly && (
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600, padding: '5px 10px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                Only Read (Viewer Mode)
+              </span>
+            )}
           </div>
         )
       }
     >
-      {toast && <div className="alert alert-success"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
+      {toast && <div className="alert alert-success alert-toast"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* Filters & Control Bar */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -269,12 +356,13 @@ export default function StudentAttendance() {
             />
           </div>
 
-          <select className="input" style={{ width: 130, padding: '7px 10px', fontSize: 13 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
             <option value="present">Present</option>
             <option value="absent">Absent</option>
             <option value="late">Late</option>
             <option value="half-day">Half Day</option>
+            <option value="not_marked">Not Marked (Blank)</option>
           </select>
 
         </div>
@@ -301,7 +389,7 @@ export default function StudentAttendance() {
 
       {loading ? <div className="loading-overlay"><div className="spinner" /> Loading attendance records...</div> : (
         <>
-          {renderedPeriods.length > 0 && renderedPeriods.flatMap(periodKey => {
+          {renderedPeriods.length > 0 ? renderedPeriods.flatMap(periodKey => {
             const group = periodGroups[periodKey] || [];
             const periodClassGroups = group.reduce((acc, record) => {
               const classKey = `${record.class_name || ''} ${record.section || ''}`.trim() || 'Unassigned Class';
@@ -318,11 +406,12 @@ export default function StudentAttendance() {
               const filteredRows = classRows.filter(record => {
                 const term = (search || '').trim().toLowerCase();
                 const hitsText = !term || `${record.full_name || ''} ${record.admission_no || ''} ${record.roll_no || ''} ${record.branch_name || ''} ${record.class_name || ''} ${record.section || ''}`.toLowerCase().includes(term);
-                const hitsStatus = !statusFilter || (record.status || 'absent') === statusFilter;
+                const recStatus = record.status || '';
+                const hitsStatus = !statusFilter ? true : statusFilter === 'not_marked' ? !recStatus : recStatus === statusFilter;
                 return hitsText && hitsStatus;
               });
-              const present = filteredRows.filter(r => (r.status || 'absent') === 'present').length;
-              const absent = filteredRows.filter(r => (r.status || 'absent') === 'absent').length;
+              const present = filteredRows.filter(r => r.status === 'present').length;
+              const absent = filteredRows.filter(r => r.status === 'absent').length;
 
               return (
                 <div key={`${periodKey}-${classKey}`} className="card" style={{ marginBottom: 20 }}>
@@ -362,7 +451,15 @@ export default function StudentAttendance() {
                             <td>{record.roll_no || '—'}</td>
                             <td>{record.branch_name || '—'}</td>
                             <td>{record.check_in || '—'}</td>
-                            <td><span className={`badge ${record.status === 'present' ? 'badge-success' : record.status === 'absent' ? 'badge-danger' : 'badge-warning'}`}>{record.status || 'present'}</span></td>
+                            <td>
+                              {record.status ? (
+                                <span className={`badge ${record.status === 'present' ? 'badge-success' : record.status === 'absent' ? 'badge-danger' : record.status === 'late' ? 'badge-warning' : 'badge-secondary'}`}>
+                                  {record.status}
+                                </span>
+                              ) : (
+                                ''
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -371,9 +468,120 @@ export default function StudentAttendance() {
                 </div>
               );
             });
-          })}
+          }) : (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>Student Daily Attendance</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
+                    {filteredDailyRecords.length} Students &nbsp;&nbsp;&nbsp;
+                    <span className="badge badge-success" style={{ marginRight: 8 }}>{summary.present} Present</span>
+                    <span className="badge badge-danger">{summary.absent} Absent</span>
+                  </div>
+                </div>
+                {!isReadOnly && records.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-sm btn-success" onClick={() => markAll('present')}>✓ All Present</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => markAll('absent')}>✗ All Absent</button>
+                    <button className="btn btn-sm btn-secondary" onClick={() => markAll('')}>Clear All</button>
+                  </div>
+                )}
+              </div>
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Student Name</th>
+                      <th>Admission No</th>
+                      <th>Roll No</th>
+                      <th>Class</th>
+                      <th>Branch</th>
+                      <th>Check In</th>
+                      <th>Check Out</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDailyRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={9}>
+                          <div className="empty-state">
+                            <div className="empty-state-title">No student attendance records</div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredDailyRecords.map((r, idx) => (
+                        <tr key={r.id}>
+                          <td>{idx + 1}</td>
+                          <td style={{ fontWeight: 600 }}>{r.full_name}</td>
+                          <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.admission_no || '—'}</td>
+                          <td>{r.roll_no || '—'}</td>
+                          <td>{r.class_name ? `${r.class_name} ${r.section || ''}`.trim() : '—'}</td>
+                          <td>{r.branch_name || '—'}</td>
+                          <td>
+                            <input 
+                              type="time" 
+                              className="input" 
+                              style={{ width: 110, padding: '5px 8px', fontSize: 13 }} 
+                              value={getVal(r, 'check_in')} 
+                              disabled={isReadOnly}
+                              onChange={(e) => updateChange(r.id, 'check_in', e.target.value)} 
+                            />
+                          </td>
+                          <td>
+                            <input 
+                              type="time" 
+                              className="input" 
+                              style={{ width: 110, padding: '5px 8px', fontSize: 13 }} 
+                              value={getVal(r, 'check_out')} 
+                              disabled={isReadOnly}
+                              onChange={(e) => updateChange(r.id, 'check_out', e.target.value)} 
+                            />
+                          </td>
+                          <td>
+                            <select 
+                              className="input" 
+                              style={{ 
+                                padding: '6px 10px', 
+                                fontSize: 13, 
+                                width: 125, 
+                                background: getVal(r, 'status') === 'present' ? '#f0fdf4' : getVal(r, 'status') === 'absent' ? '#fef2f2' : getVal(r, 'status') === 'late' ? '#fffbeb' : getVal(r, 'status') === 'half-day' ? '#faf5ff' : 'var(--bg, #ffffff)',
+                                color: getVal(r, 'status') === 'present' ? '#15803d' : getVal(r, 'status') === 'absent' ? '#dc2626' : getVal(r, 'status') === 'late' ? '#d97706' : getVal(r, 'status') === 'half-day' ? '#7e22ce' : 'var(--text-muted, #94a3b8)', 
+                                fontWeight: getVal(r, 'status') ? 700 : 400 
+                              }}
+                              value={getVal(r, 'status')} 
+                              disabled={isReadOnly}
+                              onChange={(e) => updateChange(r.id, 'status', e.target.value)}
+                            >
+                              <option value="">—--—</option>
+                              <option value="present">Present</option>
+                              <option value="absent">Absent</option>
+                              <option value="late">Late</option>
+                              <option value="half-day">Half Day</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
+
+      {/* Export CSV Modal */}
+      <ExportCSVModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Student Attendance"
+        isAttendance={true}
+        loading={exporting}
+        onExport={handleExecuteExport}
+      />
     </Layout>
   );
 }

@@ -22,14 +22,31 @@ pgPool.query('ALTER TABLE classes ADD COLUMN IF NOT EXISTS teacher_ids INT[]').c
   console.error('Failed to add teacher_ids column to classes:', err.message);
 });
 
-// Auto-migration: Academic data columns on staff and classes
+// Auto-migration: Academic data columns and shift timings on staff and classes
 pgPool.query(`
   ALTER TABLE staff ADD COLUMN IF NOT EXISTS department VARCHAR(100);
   ALTER TABLE staff ADD COLUMN IF NOT EXISTS subject VARCHAR(100);
   ALTER TABLE staff ADD COLUMN IF NOT EXISTS academic_year VARCHAR(50) DEFAULT '2026-2027';
+  ALTER TABLE staff ADD COLUMN IF NOT EXISTS expected_check_in TIME DEFAULT '09:00:00';
+  ALTER TABLE staff ADD COLUMN IF NOT EXISTS expected_check_out TIME DEFAULT '17:00:00';
   ALTER TABLE classes ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';
 `).catch(err => {
-  console.error('Failed to add academic data columns:', err.message);
+  console.error('Failed to add academic data or shift columns:', err.message);
+});
+
+// Auto-migration: Soft delete columns (is_deleted, deleted_at)
+const softDeleteTables = [
+  'classes', 'students', 'staff', 'branches', 'admin_users',
+  'academic_groups', 'branch_groups', 'notices', 'holidays',
+  'leave_types', 'leaves', 'organisations', 'timetable_slots'
+];
+softDeleteTables.forEach(tbl => {
+  pgPool.query(`
+    ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+    ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+  `).catch(err => {
+    console.error(`Failed to add soft delete columns to ${tbl}:`, err.message);
+  });
 });
 
 pgPool.query(`

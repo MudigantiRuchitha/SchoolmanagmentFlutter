@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireFullAdmin } = require('../middleware/auth');
 
 // GET /api/admins
 router.get('/', authMiddleware, async (req, res) => {
@@ -10,7 +10,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await pool.query(
       `SELECT id, username, full_name, email, phone, role, branch_access, is_active, created_at
        FROM admin_users
-       WHERE org_id = $1${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND (branch_access = $2 OR branch_access = \'all\')' : ''}
+       WHERE org_id = $1 AND (is_deleted IS NOT TRUE)${req.admin.branchAccess && req.admin.branchAccess !== 'all' ? ' AND (branch_access = $2 OR branch_access = \'all\')' : ''}
        ORDER BY created_at DESC`,
       req.admin.branchAccess && req.admin.branchAccess !== 'all' ? [req.admin.orgId, req.admin.branchAccess] : [req.admin.orgId]
     );
@@ -21,12 +21,12 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // POST /api/admins
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     const { username, password, fullName, email, phone, role, branchAccess } = req.body;
     if (!username || !password) return res.status(400).json({ success: false, message: 'Username and password are required.' });
 
-    const existing = await pool.query('SELECT id FROM admin_users WHERE org_id = $1 AND LOWER(username) = LOWER($2)', [req.admin.orgId, username]);
+    const existing = await pool.query('SELECT id FROM admin_users WHERE org_id = $1 AND LOWER(username) = LOWER($2) AND (is_deleted IS NOT TRUE)', [req.admin.orgId, username]);
     if (existing.rows.length > 0) return res.status(400).json({ success: false, message: 'Username already exists.' });
 
     const hash = await bcrypt.hash(password, 10);
@@ -42,7 +42,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // PUT /api/admins/:id
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     const { fullName, email, phone, role, branchAccess, isActive, newPassword } = req.body;
     let hash = null;
@@ -69,12 +69,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/admins/:id
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, requireFullAdmin, async (req, res) => {
   try {
     if (parseInt(req.params.id) === req.admin.adminId) {
       return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
     }
-    await pool.query('DELETE FROM admin_users WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
+    await pool.query('UPDATE admin_users SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND org_id = $2', [req.params.id, req.admin.orgId]);
     res.json({ success: true, message: 'Admin deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });

@@ -12,9 +12,9 @@ router.get('/years', authMiddleware, async (req, res) => {
     const orgId = req.admin.orgId;
     const query = `
       SELECT DISTINCT academic_year FROM (
-        SELECT academic_year FROM classes WHERE org_id = $1 AND academic_year IS NOT NULL AND TRIM(academic_year) != ''
+        SELECT academic_year FROM classes WHERE org_id = $1 AND (is_deleted IS NOT TRUE) AND academic_year IS NOT NULL AND TRIM(academic_year) != ''
         UNION
-        SELECT academic_year FROM staff WHERE org_id = $1 AND academic_year IS NOT NULL AND TRIM(academic_year) != ''
+        SELECT academic_year FROM staff WHERE org_id = $1 AND (is_deleted IS NOT TRUE) AND academic_year IS NOT NULL AND TRIM(academic_year) != ''
       ) years
       ORDER BY academic_year DESC
     `;
@@ -48,7 +48,7 @@ router.get('/classes', authMiddleware, async (req, res) => {
     let query = `
       SELECT id, name, class_name, section, academic_year, branch_id
       FROM classes
-      WHERE org_id = $1
+      WHERE org_id = $1 AND (is_deleted IS NOT TRUE)
     `;
     const params = [orgId];
     let paramCount = 1;
@@ -136,7 +136,7 @@ router.get('/students', authMiddleware, async (req, res) => {
       FROM students s
       JOIN classes c ON c.id = s.class_id
       LEFT JOIN branches b ON b.id = s.branch_id
-      WHERE s.org_id = $1
+      WHERE s.org_id = $1 AND (s.is_deleted IS NOT TRUE) AND (c.is_deleted IS NOT TRUE)
     `;
     const params = [orgId];
     let paramCount = 1;
@@ -232,7 +232,7 @@ router.get('/staff', authMiddleware, async (req, res) => {
           b.name AS branch_name
         FROM staff s
         LEFT JOIN branches b ON b.id = s.branch_id
-        WHERE s.org_id = $1
+        WHERE s.org_id = $1 AND (s.is_deleted IS NOT TRUE)
           AND (s.role_type = 'non-teaching' OR s.role_type = 'management')
       `;
     } else {
@@ -254,6 +254,7 @@ router.get('/staff', authMiddleware, async (req, res) => {
               SELECT STRING_AGG(DISTINCT c.subject, ', ') 
               FROM classes c 
               WHERE (c.teacher_id = s.id OR (c.teacher_ids IS NOT NULL AND s.id = ANY(c.teacher_ids)))
+                AND (c.is_deleted IS NOT TRUE)
                 AND c.subject IS NOT NULL AND c.subject != ''
             ),
             'General'
@@ -265,6 +266,7 @@ router.get('/staff', authMiddleware, async (req, res) => {
               SELECT STRING_AGG(DISTINCT COALESCE(c.class_name, c.name), ', ')
               FROM classes c
               WHERE (c.teacher_id = s.id OR (c.teacher_ids IS NOT NULL AND s.id = ANY(c.teacher_ids)))
+                AND (c.is_deleted IS NOT TRUE)
             ),
             '—'
           ) AS class_name,
@@ -273,6 +275,7 @@ router.get('/staff', authMiddleware, async (req, res) => {
               SELECT STRING_AGG(DISTINCT c.section, ', ')
               FROM classes c
               WHERE (c.teacher_id = s.id OR (c.teacher_ids IS NOT NULL AND s.id = ANY(c.teacher_ids)))
+                AND (c.is_deleted IS NOT TRUE)
                 AND c.section IS NOT NULL AND c.section != ''
             ),
             '—'
@@ -284,7 +287,7 @@ router.get('/staff', authMiddleware, async (req, res) => {
           b.name AS branch_name
         FROM staff s
         LEFT JOIN branches b ON b.id = s.branch_id
-        WHERE s.org_id = $1
+        WHERE s.org_id = $1 AND (s.is_deleted IS NOT TRUE)
           AND (s.role_type = 'teaching' OR s.role_type IS NULL)
       `;
     }
