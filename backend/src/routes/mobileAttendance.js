@@ -14,6 +14,7 @@ router.post('/Report/GetContactMonthlyAttendanceCount', deviceAuth, attendanceCo
 router.post('/Report/GetDailyAttendance', deviceAuth, attendanceController.getDailyAttendance);
 router.post('/Report/GetDailyChartAttendance', deviceAuth, attendanceController.getDailyChartAttendance);
 router.post('/Report/DownloadContactMonthlyAttendanceReport', deviceAuth, attendanceController.downloadReport);
+router.post('/Report/DownloadContactDailyAttendanceReport', deviceAuth, attendanceController.downloadDailyReport);
 
 // Holiday routing
 router.post('/Holiday/GetHolidayDetails', deviceAuth, attendanceController.getHolidayDetails);

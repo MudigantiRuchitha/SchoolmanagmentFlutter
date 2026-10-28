@@ -22,6 +22,7 @@
    - [GET /api/classes/teacher/:teacherId](#61-get-teacher-classes--timetable-slots)
    - [POST /api/attendance/session](#62-submit-attendance-session-punch)
    - [GET /api/attendance/students](#63-get-student-attendance-report)
+  - [POST Mobile Attendance PDF Reports](#64-download-mobile-attendance-pdf-reports)
 
 ---
 
@@ -511,6 +512,32 @@ Queries student attendance history by date, branch, and class.
       "date": "2026-09-03"
     }
   ]
+}
+```
+
+---
+
+### 6.4. Download Mobile Attendance PDF Reports
+Generate a PDF from the selected teacher's database attendance records. The Android client should call the monthly endpoint when the Monthly tab is selected and the daily endpoint when the Daily tab is selected. The returned `DownloadUrl` is an absolute URL; issue a `GET` to download the PDF.
+
+| Selected tab | Method and endpoint | Request body |
+| :--- | :--- | :--- |
+| Monthly | `POST /api/Report/DownloadContactMonthlyAttendanceReport` | `{"UserId":"STF001","Month":10,"Year":2026}` |
+| Daily | `POST /api/Report/DownloadContactDailyAttendanceReport` | `{"UserId":"STF001","Date":"2026-10-13"}` |
+
+Include the device Bearer token in the report-generation request when available. Successful responses include `DownloadUrl`, the backward-compatible `ReportPath`, `FileName`, `ContentType: "application/pdf"`, and `Status: 1`. The file URL responds with `application/pdf` and an attachment filename.
+
+Monthly reports include organization and teacher details, the selected month and year, present/absent/leave/holiday/weekly-off totals, working days, attendance percentage, daily statuses, punch records, and working durations. Daily reports include the selected date, attendance status, individual punch times, and paired working durations.
+
+#### Successful response
+```json
+{
+  "ReportPath": "/uploads/reports/attendance-monthly-1-2026-10.pdf",
+  "DownloadUrl": "https://school.example.com/uploads/reports/attendance-monthly-1-2026-10.pdf",
+  "FileName": "attendance-monthly-1-2026-10.pdf",
+  "ContentType": "application/pdf",
+  "Status": 1,
+  "Message": "Monthly PDF report generated"
 }
 ```
 

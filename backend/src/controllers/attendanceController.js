@@ -1,5 +1,7 @@
 const db = require('../config/db');
-const { isAfterSchoolHour, calculateStaffAttendanceStatus } = require('../utils/attendanceHelper');
+const fs = require('fs');
+const path = require('path');
+const { generateMonthlyAttendancePdf, generateDailyAttendancePdf } = require('../utils/attendancePdf');
 
 // Helper to extract clean HH:MM:SS time string for PostgreSQL TIME data type
 function extractTime(val) {
@@ -17,6 +19,144 @@ function extractTime(val) {
     return s.slice(0, 8);
   }
   return s;
+}
+
+function calculateWorkingHours(date, inTime, outTime) {
+  if (!inTime || !outTime) return 'Punch out pending';
+
+  const inDate = new Date(`${date}T${String(inTime).slice(0, 8)}`);
+  const outDate = new Date(`${date}T${String(outTime).slice(0, 8)}`);
+  if (Number.isNaN(inDate.getTime()) || Number.isNaN(outDate.getTime())) {
+    return 'Punch out pending';
+  }
+
+  let durationSeconds = Math.floor((outDate.getTime() - inDate.getTime()) / 1000);
+  if (durationSeconds < 0) durationSeconds += 24 * 60 * 60;
+
+  const hours = Math.floor(durationSeconds / 3600);
+  const minutes = Math.floor((durationSeconds % 3600) / 60);
+  const seconds = durationSeconds % 60;
+  const parts = [`${hours} hrs`];
+  if (minutes || seconds) parts.push(`${minutes} mins`);
+  if (seconds) parts.push(`${seconds} secs`);
+  return parts.join(' ');
+}
+
+async function resolveReportStaff(identifier) {
+  if (!identifier) return null;
+
+  const [rows] = await db.query(
+    `SELECT s.id, s.org_id, s.staff_id, s.full_name, s.role_type, s.designation,
+            o.name AS org_name, o.address AS org_address, o.phone AS org_phone, o.email AS org_email
+     FROM staff s
+     LEFT JOIN organisations o ON o.id = s.org_id
+    WHERE s.is_active = true
+       AND (s.id::text = $1 OR s.staff_id = $1 OR LOWER(s.username) = LOWER($1))
+     LIMIT 1`,
+    [String(identifier)]
+  );
+
+  return rows[0] || null;
+}
+
+function getReportPeriod(body) {
+  const year = Number(body.Year ?? body.year ?? new Date().getFullYear());
+  const month = Number(body.Month ?? body.month ?? new Date().getMonth() + 1);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error('Valid Year and Month are required');
+  }
+
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const next = new Date(Date.UTC(year, month, 1));
+  const dateValue = value => value.toISOString().slice(0, 10);
+
+  return {
+    year,
+    month,
+    startDate: dateValue(start),
+    nextDate: dateValue(next),
+    monthName: start.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
+  };
+}
+
+async function getAttendanceCalendar(staff, period) {
+  const [attendanceRows, sessionRows, leaveRows, holidayRows] = await Promise.all([
+    db.query(
+      `SELECT date::text AS date, shift_status AS status, check_in, check_out
+       FROM staff_attendance
+       WHERE staff_id = $1 AND org_id = $2
+         AND date >= $3 AND date < $4`,
+      [staff.id, staff.org_id, period.startDate, period.nextDate]
+    ),
+    db.query(
+      `SELECT session_date::text AS date,
+              MIN(session_time) AS check_in,
+              MAX(session_time) AS check_out
+       FROM attendance_sessions
+       WHERE teacher_id = $1
+         AND session_date >= $2 AND session_date < $3
+       GROUP BY session_date`,
+      [staff.id, period.startDate, period.nextDate]
+    ),
+    db.query(
+      `SELECT TO_CHAR(day_value, 'YYYY-MM-DD') AS date
+       FROM leaves l
+       CROSS JOIN LATERAL generate_series(
+         GREATEST(l.from_date, $3::date),
+         LEAST(l.to_date, ($4::date - INTERVAL '1 day')::date),
+         INTERVAL '1 day'
+       ) AS day_value
+       WHERE l.staff_id = $1
+         AND l.org_id = $2
+         AND LOWER(COALESCE(l.status, '')) IN ('approved', 'informed')
+         AND l.from_date < $4::date
+         AND l.to_date >= $3::date`,
+      [staff.id, staff.org_id, period.startDate, period.nextDate]
+    ),
+    db.query(
+      `SELECT TO_CHAR(COALESCE(holiday_date, date), 'YYYY-MM-DD') AS date
+       FROM holidays
+       WHERE org_id = $1
+         AND COALESCE(holiday_date, date) >= $2::date
+         AND COALESCE(holiday_date, date) < $3::date`,
+      [staff.org_id, period.startDate, period.nextDate]
+    )
+  ]);
+
+  const attendanceByDate = new Map();
+  for (const row of attendanceRows[0]) attendanceByDate.set(row.date, row);
+  for (const row of sessionRows[0]) {
+    if (!attendanceByDate.has(row.date)) attendanceByDate.set(row.date, row);
+  }
+
+  const leaveDates = new Set(leaveRows[0].map(row => row.date));
+  const holidayDates = new Set(holidayRows[0].map(row => row.date));
+  const days = [];
+  const cursor = new Date(`${period.startDate}T00:00:00Z`);
+  const end = new Date(`${period.nextDate}T00:00:00Z`);
+
+  while (cursor < end) {
+    const date = cursor.toISOString().slice(0, 10);
+    const dayOfWeek = cursor.getUTCDay();
+    const attendance = attendanceByDate.get(date);
+    let status = 'absent';
+
+    if (holidayDates.has(date)) status = 'holiday';
+    else if (dayOfWeek === 0 || dayOfWeek === 6) status = 'weekly_off';
+    else if (leaveDates.has(date)) status = 'leave';
+    else if (attendance && ['present', 'late'].includes(String(attendance.status || '').toLowerCase())) status = 'present';
+
+    days.push({
+      date,
+      status,
+      checkIn: attendance?.check_in || null,
+      checkOut: attendance?.check_out || null
+    });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return days;
 }
 
 // Submit Attendance Session (standard REST)
@@ -480,31 +620,41 @@ async function submitTeacherAttendance(req, res) {
 
 // Get Monthly Attendance logs list
 async function getContactMonthlyAttendance(req, res) {
-  const { UserId, Year, Month } = req.body;
-
   try {
-    const startDate = `${Year}-${String(Month).padStart(2, '0')}-01`;
-    const endDate = `${Year}-${String(Month).padStart(2, '0')}-31`;
+    const staff = await resolveReportStaff(req.body.UserId);
+    if (!staff) return res.json({ Status: 0, Message: 'Staff member not found' });
+    const period = getReportPeriod(req.body);
 
     const [rows] = await db.query(
-      `SELECT session_date, MIN(session_time) as in_time, MAX(session_time) as out_time 
-      FROM attendance_sessions 
-      WHERE teacher_id::text = $1::text AND session_date BETWEEN $2 AND $3 
-      GROUP BY session_date`,
-      [String(UserId), startDate, endDate]
+      `SELECT TO_CHAR(attendance_date, 'YYYY-MM-DD') AS session_date,
+              MIN(in_time) AS in_time,
+              MAX(out_time) AS out_time
+       FROM (
+         SELECT date AS attendance_date, check_in AS in_time, check_out AS out_time
+         FROM staff_attendance
+         WHERE staff_id = $1 AND org_id = $4
+           AND date >= $2 AND date < $3
+         UNION ALL
+         SELECT session_date AS attendance_date, session_time AS in_time, NULL AS out_time
+         FROM attendance_sessions
+         WHERE teacher_id = $1
+           AND session_date >= $2 AND session_date < $3
+       ) attendance
+       GROUP BY attendance_date
+       ORDER BY attendance_date`,
+      [staff.id, period.startDate, period.nextDate, staff.org_id]
     );
 
-    const displayId = String(UserId || '01').padStart(2, '0');
     const logs = rows.map(r => {
-      const dateStr = new Date(r.session_date).toISOString().split('T')[0];
+      const dateStr = r.session_date;
       return {
-        ContactId: displayId,
-        UserId: displayId,
+        ContactId: String(staff.staff_id || staff.id),
+        UserId: String(staff.staff_id || staff.id),
         MonthDate: dateStr,
         WeakDay: new Date(r.session_date).toLocaleDateString('en-US', { weekday: 'long' }),
         InTime: r.in_time,
         OutTime: r.out_time,
-        WorkingHours: '8 hrs',
+        WorkingHours: calculateWorkingHours(dateStr, r.in_time, r.out_time),
         Attendance: 'Present',
         InPunchPhotoUrl: null,
         OutPunchPhotoUrl: null,
@@ -525,43 +675,329 @@ async function getContactMonthlyAttendance(req, res) {
 
 // Get Monthly Attendance counts
 async function getContactMonthlyAttendanceCount(req, res) {
-  const { UserId } = req.body;
-  const displayId = String(UserId || '01').padStart(2, '0');
-  res.json({
-    objContactMonthlyAttendanceInfoList: [
-      { ContactId: displayId, UserId: displayId, Month: 'August', WorkingDays: 22, Present: 20, Absent: 2, Leaves: 0, Holiday: 0, WeaklyOff: 8 }
-    ],
-    Status: 1,
-    Message: 'Success',
-    Exception: null
-  });
+  try {
+    const staff = await resolveReportStaff(req.body.UserId);
+    if (!staff) return res.json({ Status: 0, Message: 'Staff member not found' });
+    const year = Number(req.body.Year ?? req.body.year ?? new Date().getFullYear());
+    if (!Number.isInteger(year) || year < 1) {
+      return res.json({ Status: 0, Message: 'Valid Year is required' });
+    }
+
+    const monthlySummaries = await Promise.all(
+      Array.from({ length: 12 }, (_, index) => {
+        const period = getReportPeriod({ Year: year, Month: index + 1 });
+        const today = new Date();
+        const isCurrentMonth =
+          year === today.getFullYear() &&
+          index + 1 === today.getMonth() + 1;
+
+        if (isCurrentMonth) {
+          const tomorrow = new Date(Date.UTC(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate() + 1
+          ));
+          period.nextDate = tomorrow.toISOString().slice(0, 10);
+        }
+
+        return getAttendanceCalendar(staff, period).then(days => {
+          const counts = days.reduce((result, day) => {
+            if (day.status === 'present') result.present += 1;
+            else if (day.status === 'absent') result.absent += 1;
+            else if (day.status === 'leave') result.leaves += 1;
+            else if (day.status === 'holiday') result.holiday += 1;
+            else if (day.status === 'weekly_off') result.weeklyOff += 1;
+            return result;
+          }, { present: 0, absent: 0, leaves: 0, holiday: 0, weeklyOff: 0 });
+
+          return {
+            ContactId: String(staff.staff_id || staff.id),
+            UserId: String(staff.staff_id || staff.id),
+            Month: period.monthName,
+            WorkingDays: counts.present + counts.absent + counts.leaves,
+            Present: counts.present,
+            Absent: counts.absent,
+            Leaves: counts.leaves,
+            Holiday: counts.holiday,
+            WeaklyOff: counts.weeklyOff,
+            AttendanceRate: counts.present + counts.absent > 0
+              ? Number(((counts.present / (counts.present + counts.absent)) * 100).toFixed(2))
+              : 0
+          };
+        });
+      })
+    );
+
+    return res.json({
+      objContactMonthlyAttendanceInfoList: monthlySummaries,
+      Status: 1,
+      Message: 'Success',
+      Exception: null
+    });
+  } catch (err) {
+    console.error('getContactMonthlyAttendanceCount:', err);
+    return res.json({ Status: 0, Message: 'Report failed', Exception: err.message });
+  }
 }
 
 // Get Daily Attendance summary
 async function getDailyAttendance(req, res) {
-  res.json({
-    TotalCount: 1,
-    Present: 1,
-    Absent: 0,
-    objDailyAttendanceInfoList: [
-      { GroupName: 'Teachers', SubGroupName: 'Math', TotalCount: 1, Present: 1, Absent: 0 }
-    ],
-    Status: 1,
-    Message: 'Success'
-  });
+  try {
+    const staff = await resolveReportStaff(req.body.UserId);
+    if (!staff) return res.json({ Status: 0, Message: 'Staff member not found' });
+    const targetDate = req.body.Date || req.body.date || new Date().toISOString().split('T')[0];
+    const target = new Date(`${targetDate}T00:00:00Z`);
+    if (Number.isNaN(target.getTime())) return res.json({ Status: 0, Message: 'Invalid date' });
+    const period = getReportPeriod({ Year: target.getUTCFullYear(), Month: target.getUTCMonth() + 1 });
+    const day = (await getAttendanceCalendar(staff, period)).find(item => item.date === targetDate);
+    const isPresent = day?.status === 'present';
+    const isAbsent = day?.status === 'absent';
+
+    return res.json({
+      TotalCount: 1,
+      Present: isPresent ? 1 : 0,
+      Absent: isAbsent ? 1 : 0,
+      objDailyAttendanceInfoList: [{
+        GroupName: 'Teachers',
+        SubGroupName: staff.designation || staff.role_type || 'Teacher',
+        TotalCount: 1,
+        Present: isPresent ? 1 : 0,
+        Absent: isAbsent ? 1 : 0,
+        Holiday: day?.status === 'holiday' ? 1 : 0,
+        Leave: day?.status === 'leave' ? 1 : 0,
+        WeaklyOff: day?.status === 'weekly_off' ? 1 : 0
+      }],
+      Status: 1,
+      Message: 'Success'
+    });
+  } catch (err) {
+    console.error('getDailyAttendance:', err);
+    return res.json({ Status: 0, Message: 'Report failed', Exception: err.message });
+  }
 }
 
 // Get Daily Chart Attendance info
-function getDailyChartAttendance(req, res) {
-  res.json({
-    ChartData: [{ ChartLabel: 'Math', ChartStepSize: 1, ChartTitle: 'Daily Present', ChartType: 'bar' }],
-    Status: 1
-  });
+async function getDailyChartAttendance(req, res) {
+  try {
+    const staff = await resolveReportStaff(req.body.UserId);
+    if (!staff) return res.json({ Status: 0, Message: 'Staff member not found' });
+    const period = getReportPeriod(req.body);
+    const days = await getAttendanceCalendar(staff, period);
+
+    return res.json({
+      ChartData: days.map(day => ({
+        ChartLabel: day.date,
+        ChartStepSize: 1,
+        ChartTitle: 'Daily Attendance',
+        ChartType: 'bar',
+        Status: day.status,
+        Present: day.status === 'present' ? 1 : 0,
+        Absent: day.status === 'absent' ? 1 : 0
+      })),
+      Status: 1
+    });
+  } catch (err) {
+    console.error('getDailyChartAttendance:', err);
+    return res.json({ Status: 0, Message: 'Report failed', Exception: err.message });
+  }
 }
 
-// Download report file
-function downloadReport(req, res) {
-  res.json({ ReportPath: '/reports/dummy.pdf', Status: 1 });
+function durationSeconds(startTime, endTime) {
+  const toSeconds = value => {
+    const parts = String(value).slice(0, 8).split(':').map(Number);
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  };
+  let seconds = toSeconds(endTime) - toSeconds(startTime);
+  if (seconds < 0) seconds += 24 * 60 * 60;
+  return seconds;
+}
+
+function formatDuration(seconds) {
+  if (!seconds) return '00:00:00';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return [hours, minutes, remainingSeconds].map(value => String(value).padStart(2, '0')).join(':');
+}
+
+function formatPunches(punches) {
+  let currentIn = null;
+  let totalSeconds = 0;
+  const records = punches.map((time, index) => {
+    const isIn = index % 2 === 0;
+    if (isIn) {
+      currentIn = time;
+      return { type: 'Punch in', time, duration: null };
+    }
+    const seconds = currentIn ? durationSeconds(currentIn, time) : 0;
+    totalSeconds += seconds;
+    currentIn = null;
+    return { type: 'Punch out', time, duration: formatDuration(seconds) };
+  });
+
+  const hasPendingPunchOut = Boolean(currentIn);
+  if (hasPendingPunchOut) records[records.length - 1].duration = 'Punch out pending';
+  return {
+    records,
+    totalSeconds,
+    workingDuration: !records.length
+      ? 'No punches recorded'
+      : hasPendingPunchOut && totalSeconds === 0
+        ? 'Punch out pending'
+        : `${formatDuration(totalSeconds)}${hasPendingPunchOut ? ' (punch out pending)' : ''}`,
+    punchesText: records.map(record => `${record.type}: ${record.time}`).join('\n') || 'No punches recorded'
+  };
+}
+
+async function loadReportPunches(staff, period) {
+  const [rows] = await db.query(
+    `SELECT date::text AS date, TO_CHAR(punch_time, 'HH24:MI:SS') AS punch_time
+     FROM staff_attendance_punches
+     WHERE staff_id = $1 AND org_id = $2
+       AND date >= $3 AND date < $4
+     ORDER BY date, punch_time, id`,
+    [staff.id, staff.org_id, period.startDate, period.nextDate]
+  );
+  return rows.reduce((byDate, row) => {
+    if (!byDate.has(row.date)) byDate.set(row.date, []);
+    byDate.get(row.date).push(row.punch_time);
+    return byDate;
+  }, new Map());
+}
+
+function getStatusLabel(status) {
+  return ({
+    present: 'Present',
+    absent: 'Absent',
+    leave: 'Leave',
+    holiday: 'Holiday',
+    weekly_off: 'Weekly off'
+  })[status] || 'Absent';
+}
+
+function makeDownloadUrl(req, fileName) {
+  return `${req.protocol}://${req.get('host')}/uploads/reports/${encodeURIComponent(fileName)}`;
+}
+
+async function downloadReport(req, res) {
+  try {
+    const staff = await resolveReportStaff(req.body.UserId || req.body.userId);
+    if (!staff) return res.json({ Status: 0, Message: 'Staff member not found' });
+    const period = getReportPeriod(req.body);
+    const today = new Date();
+    if (period.year === today.getFullYear() && period.month === today.getMonth() + 1) {
+      period.nextDate = new Date(Date.UTC(
+        today.getFullYear(), today.getMonth(), today.getDate() + 1
+      )).toISOString().slice(0, 10);
+    }
+    const [calendar, punchesByDate] = await Promise.all([
+      getAttendanceCalendar(staff, period),
+      loadReportPunches(staff, period)
+    ]);
+    const days = calendar.map(day => {
+      const punches = punchesByDate.get(day.date) || [day.checkIn, day.checkOut].filter(Boolean);
+      const details = formatPunches(punches);
+      return {
+        date: day.date,
+        weekDay: new Date(`${day.date}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }),
+        status: getStatusLabel(day.status),
+        punchesText: details.punchesText,
+        workingDuration: details.workingDuration
+      };
+    });
+    const counts = calendar.reduce((result, day) => {
+      if (day.status === 'present') result.present += 1;
+      else if (day.status === 'absent') result.absent += 1;
+      else if (day.status === 'leave') result.leaves += 1;
+      else if (day.status === 'holiday') result.holidays += 1;
+      else if (day.status === 'weekly_off') result.weeklyOff += 1;
+      return result;
+    }, { present: 0, absent: 0, leaves: 0, holidays: 0, weeklyOff: 0 });
+    const denominator = counts.present + counts.absent;
+    const summary = {
+      ...counts,
+      workingDays: counts.present + counts.absent + counts.leaves,
+      percentage: denominator ? ((counts.present / denominator) * 100).toFixed(2) : '0.00'
+    };
+    const reportDirectory = path.join(__dirname, '../../uploads/reports');
+    await fs.promises.mkdir(reportDirectory, { recursive: true });
+    const fileName = `attendance-monthly-${staff.id}-${period.year}-${String(period.month).padStart(2, '0')}.pdf`;
+    await generateMonthlyAttendancePdf(path.join(reportDirectory, fileName), {
+      staff,
+      periodLabel: `${period.monthName} ${period.year}`,
+      summary,
+      days
+    });
+    const downloadUrl = makeDownloadUrl(req, fileName);
+    const reportPath = `/uploads/reports/${encodeURIComponent(fileName)}`;
+    return res.json({
+      ReportPath: reportPath,
+      DownloadUrl: downloadUrl,
+      FileName: fileName,
+      ContentType: 'application/pdf',
+      Status: 1,
+      Message: 'Monthly PDF report generated'
+    });
+  } catch (err) {
+    console.error('downloadReport:', err);
+    return res.json({ Status: 0, Message: 'Monthly PDF report generation failed', Exception: err.message });
+  }
+}
+
+async function downloadDailyReport(req, res) {
+  try {
+    const staff = await resolveReportStaff(req.body.UserId || req.body.userId);
+    if (!staff) return res.json({ Status: 0, Message: 'Staff member not found' });
+    const requestedDate = req.body.Date || req.body.date;
+    const targetDate = requestedDate || new Date().toISOString().slice(0, 10);
+    const parsedDate = new Date(`${targetDate}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate) || Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== targetDate) {
+      return res.json({ Status: 0, Message: 'Valid Date in YYYY-MM-DD format is required' });
+    }
+
+    const period = getReportPeriod({
+      Year: Number(targetDate.slice(0, 4)),
+      Month: Number(targetDate.slice(5, 7))
+    });
+    const [calendar, punchesByDate] = await Promise.all([
+      getAttendanceCalendar(staff, period),
+      loadReportPunches(staff, { ...period, startDate: targetDate, nextDate: new Date(
+        new Date(`${targetDate}T00:00:00Z`).getTime() + 86400000
+      ).toISOString().slice(0, 10) })
+    ]);
+    const day = calendar.find(item => item.date === targetDate);
+    if (!day) return res.json({ Status: 0, Message: 'Attendance date not found' });
+    const punches = punchesByDate.get(targetDate) || [day.checkIn, day.checkOut].filter(Boolean);
+    const details = formatPunches(punches);
+    const reportDirectory = path.join(__dirname, '../../uploads/reports');
+    await fs.promises.mkdir(reportDirectory, { recursive: true });
+    const fileName = `attendance-daily-${staff.id}-${targetDate}.pdf`;
+    await generateDailyAttendancePdf(path.join(reportDirectory, fileName), {
+      staff,
+      periodLabel: new Date(`${targetDate}T00:00:00Z`).toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+      }),
+      day: { ...day, status: getStatusLabel(day.status) },
+      punches: details.records,
+      firstIn: details.records.find(record => record.type === 'Punch in')?.time,
+      lastOut: [...details.records].reverse().find(record => record.type === 'Punch out')?.time,
+      workingDuration: details.workingDuration
+    });
+    const downloadUrl = makeDownloadUrl(req, fileName);
+    const reportPath = `/uploads/reports/${encodeURIComponent(fileName)}`;
+    return res.json({
+      ReportPath: reportPath,
+      DownloadUrl: downloadUrl,
+      FileName: fileName,
+      ContentType: 'application/pdf',
+      Status: 1,
+      Message: 'Daily PDF report generated'
+    });
+  } catch (err) {
+    console.error('downloadDailyReport:', err);
+    return res.json({ Status: 0, Message: 'Daily PDF report generation failed', Exception: err.message });
+  }
 }
 
 // Get Academic Holidays list
@@ -684,6 +1120,7 @@ module.exports = {
   getDailyAttendance,
   getDailyChartAttendance,
   downloadReport,
+  downloadDailyReport,
   getHolidayDetails,
   getLeaveMaster,
   saveContactLeave,

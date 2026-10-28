@@ -42,6 +42,11 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static files (uploaded photos)
+app.use('/uploads/reports', express.static(path.join(uploadsPath, 'reports'), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+  }
+}));
 app.use('/uploads', express.static(uploadsPath));
 app.use('/' + IMAGE_DIR, express.static(uploadsPath));
 
