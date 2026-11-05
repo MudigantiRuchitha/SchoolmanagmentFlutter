@@ -1,3 +1,4 @@
+const { calculateStaffAttendanceStatus } = require('../utils/attendanceHelper');
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -83,7 +84,7 @@ router.get('/attendance-today', authMiddleware, async (req, res) => {
           b.name as branch_name,
           sa.check_in, sa.check_out,
           CASE
-            WHEN sa.check_in IS NOT NULL AND sa.check_in > COALESCE(s.expected_check_in, '09:00:00'::TIME) AND (sa.shift_status = 'present' OR sa.shift_status IS NULL)
+            WHEN sa.check_in IS NOT NULL AND sa.check_in > (COALESCE(s.expected_check_in, '09:00:00'::TIME) + INTERVAL '15 minutes') AND (sa.shift_status = 'present' OR sa.shift_status IS NULL)
             THEN 'late'
             ELSE sa.shift_status
           END as status,
@@ -111,12 +112,26 @@ router.get('/attendance-today', authMiddleware, async (req, res) => {
 
       query += ' ORDER BY b.name, s.full_name';
       const result = await pool.query(query, params);
+      const records = result.rows.map(r => {
+        const computedStatus = calculateStaffAttendanceStatus(
+          r.check_in,
+          r.check_out,
+          r.expected_check_in,
+          r.expected_check_out,
+          r.status
+        );
+        return {
+          ...r,
+          status: computedStatus || r.status || null
+        };
+      });
 
-      const totalPresent = result.rows.filter(r => r.status === 'present').length;
-      const totalAbsent = result.rows.filter(r => r.status === 'absent').length;
-      const totalLate = result.rows.filter(r => r.status === 'late').length;
+      const totalPresent = records.filter(r => r.status === 'present').length;
+      const totalAbsent = records.filter(r => r.status === 'absent').length;
+      const totalLate = records.filter(r => r.status === 'late').length;
+      const totalHalfDay = records.filter(r => r.status === 'half-day').length;
 
-      res.json({ success: true, records: result.rows, summary: { total: result.rows.length, present: totalPresent, absent: totalAbsent, late: totalLate } });
+      res.json({ success: true, records, summary: { total: records.length, present: totalPresent, absent: totalAbsent, late: totalLate, halfDay: totalHalfDay } });
     }
   } catch (err) {
     console.error(err);

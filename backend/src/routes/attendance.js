@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { authMiddleware } = require('../middleware/auth');
-const { isAfterSchoolHour } = require('../utils/attendanceHelper');
+const { isAfterSchoolHour, calculateStaffAttendanceStatus } = require('../utils/attendanceHelper');
 
 // GET /api/attendance/students - Get student attendance report
 router.get('/students', authMiddleware, async (req, res) => {
@@ -285,12 +285,25 @@ router.get('/staff', authMiddleware, async (req, res) => {
       query += ' ORDER BY b.name, s.full_name';
 
       const result = await pool.query(query, params);
-      const present = result.rows.filter(r => r.status === 'present').length;
-      const absent = result.rows.filter(r => r.status === 'absent').length;
-      const late = result.rows.filter(r => r.status === 'late').length;
-      const halfDay = result.rows.filter(r => r.status === 'half-day').length;
+      const records = result.rows.map(r => {
+        const computedStatus = calculateStaffAttendanceStatus(
+          r.check_in,
+          r.check_out,
+          r.expected_check_in,
+          r.expected_check_out,
+          r.status
+        );
+        return {
+          ...r,
+          status: computedStatus || r.status || null
+        };
+      });
+      const present = records.filter(r => r.status === 'present').length;
+      const absent = records.filter(r => r.status === 'absent').length;
+      const late = records.filter(r => r.status === 'late').length;
+      const halfDay = records.filter(r => r.status === 'half-day').length;
 
-      return res.json({ success: true, records: result.rows, summary: { total: result.rows.length, present, absent, late, halfDay } });
+      return res.json({ success: true, records, summary: { total: records.length, present, absent, late, halfDay } });
     }
 
     // Date range
@@ -322,7 +335,20 @@ router.get('/staff', authMiddleware, async (req, res) => {
 
       query += ' ORDER BY sa.date DESC, b.name, s.full_name';
       const result = await pool.query(query, params);
-      return res.json({ success: true, records: result.rows });
+      const records = result.rows.map(r => {
+        const computedStatus = calculateStaffAttendanceStatus(
+          r.check_in,
+          r.check_out,
+          r.expected_check_in,
+          r.expected_check_out,
+          r.status
+        );
+        return {
+          ...r,
+          status: computedStatus || r.status || ''
+        };
+      });
+      return res.json({ success: true, records });
     }
 
     // Summary
@@ -373,12 +399,11 @@ router.post('/staff', authMiddleware, async (req, res) => {
       }
 
       let finalStatus = rec.status;
-      if (rec.checkIn) {
-        const staffRes = await client.query('SELECT expected_check_in FROM staff WHERE id = $1', [rec.staffId]);
-        const expIn = staffRes.rows[0]?.expected_check_in || '09:00:00';
-        if (isAfterSchoolHour(rec.checkIn, expIn) && (!finalStatus || finalStatus === 'present')) {
-          finalStatus = 'late';
-        }
+      const staffRes = await client.query('SELECT expected_check_in, expected_check_out FROM staff WHERE id = $1', [rec.staffId]);
+      const expIn = staffRes.rows[0]?.expected_check_in || '09:00:00';
+      const expOut = staffRes.rows[0]?.expected_check_out || '17:00:00';
+      if (rec.checkIn || rec.checkOut) {
+        finalStatus = calculateStaffAttendanceStatus(rec.checkIn, rec.checkOut, expIn, expOut, rec.status);
       }
 
       await client.query(

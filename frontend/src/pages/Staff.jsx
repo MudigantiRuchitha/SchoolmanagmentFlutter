@@ -1720,7 +1720,7 @@ export default function Staff() {
             <div className="form-group">
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <MdAccessTime size={15} style={{ color: 'var(--primary, #4f46e5)' }} />
-                School Check-In Time (Arrival)
+                Scheduled Login Time (Check-In)
               </label>
               <input
                 className="input"
@@ -1732,14 +1732,14 @@ export default function Staff() {
                 })}
               />
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                Standard time staff should arrive at school (e.g. 09:00 AM)
+                Standard login time (e.g. 09:00 AM). Marked 'Late' if logged in after 15 mins grace.
               </span>
             </div>
 
             <div className="form-group">
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <MdAccessTime size={15} style={{ color: 'var(--primary, #4f46e5)' }} />
-                School Check-Out Time (Departure)
+                Scheduled Logout Time (Check-Out)
               </label>
               <input
                 className="input"
@@ -1751,7 +1751,7 @@ export default function Staff() {
                 })}
               />
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                Standard time staff should leave school (e.g. 05:00 PM)
+                Standard departure/logout time (e.g. 05:00 PM).
               </span>
             </div>
           </div>

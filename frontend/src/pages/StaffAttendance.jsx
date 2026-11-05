@@ -28,11 +28,11 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-const checkIsLate = (checkInTime, expectedCheckIn) => {
+const checkIsLate = (checkInTime, expectedCheckIn, graceMinutes = 15) => {
   if (!checkInTime) return false;
   const inMins = timeToMinutes(checkInTime);
   const expMins = timeToMinutes(expectedCheckIn || '09:00');
-  return inMins > expMins;
+  return inMins > (expMins + graceMinutes);
 };
 
 export default function StaffAttendance() {
@@ -59,7 +59,7 @@ export default function StaffAttendance() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  useEffect(() => { getBranches().then(r => setBranches(filterBranches(r.data.branches || []))).catch(() => {}); }, []);
+  useEffect(() => { getBranches().then(r => setBranches(filterBranches(r.data.branches || []))).catch(() => { }); }, []);
   useEffect(() => { fetchAttendance(); }, [date, branchId, roleType]);
 
   const fetchAttendance = async () => {
@@ -71,7 +71,7 @@ export default function StaffAttendance() {
       const r = await getStaffAttendance(params);
       setRecords(r.data.records);
       setChanges({});
-    } catch {}
+    } catch { }
     setLoading(false);
   };
 
@@ -106,22 +106,48 @@ export default function StaffAttendance() {
       const recs = records.map(r => {
         const ch = changes[r.id] || {};
         const checkInVal = ch.check_in !== undefined ? ch.check_in : (r.check_in || null);
+        const checkOutVal = ch.check_out !== undefined ? ch.check_out : (r.check_out || null);
         let statusVal = ch.status !== undefined ? ch.status : (r.status || '');
 
-        if (checkInVal) {
+        if (checkInVal && checkOutVal) {
+          const inM = timeToMinutes(checkInVal);
+          const outM = timeToMinutes(checkOutVal);
+          const dur = Math.max(0, outM - inM);
+          const expInM = timeToMinutes(r.expected_check_in || '09:00');
+          const expOutM = timeToMinutes(r.expected_check_out || '17:00');
+          const totalSch = (expOutM > expInM) ? (expOutM - expInM) : 480;
+          const halfM = Math.floor(totalSch / 2);
+          const isLate = checkIsLate(checkInVal, r.expected_check_in || '09:00');
+
+          if (dur >= halfM) {
+            if (dur >= (totalSch - 30)) {
+              statusVal = isLate ? 'late' : 'present';
+            } else {
+              statusVal = 'half-day';
+            }
+          } else {
+            // Stayed less than half day (e.g. 1 min from 3:44 to 3:45)
+            // Under user rule: Must NOT show half-day!
+            if (isLate) {
+              statusVal = 'late';
+            } else if (dur < 30) {
+              statusVal = 'absent';
+            }
+          }
+        } else if (checkInVal) {
           const isLate = checkIsLate(checkInVal, r.expected_check_in || '09:00');
           if (isLate && (!statusVal || statusVal === 'present')) {
             statusVal = 'late';
           }
         }
 
-        return { 
-          staffId: r.id, 
-          date, 
-          status: statusVal, 
-          checkIn: checkInVal, 
-          checkOut: ch.check_out !== undefined ? ch.check_out : (r.check_out || null), 
-          mode: 'manual' 
+        return {
+          staffId: r.id,
+          date,
+          status: statusVal,
+          checkIn: checkInVal,
+          checkOut: checkOutVal,
+          mode: 'manual'
         };
       });
       await markStaffAttendance({ records: recs });
@@ -221,14 +247,14 @@ export default function StaffAttendance() {
   };
 
   const filteredRecords = records.filter(r => {
-    const matchesSearch = !search || 
-      r.full_name.toLowerCase().includes(search.toLowerCase()) || 
+    const matchesSearch = !search ||
+      r.full_name.toLowerCase().includes(search.toLowerCase()) ||
       (r.staff_id || '').toLowerCase().includes(search.toLowerCase());
     const currentStatus = getVal(r, 'status');
-    const matchesStatus = !statusFilter 
-      ? true 
-      : statusFilter === 'not_marked' 
-        ? !currentStatus 
+    const matchesStatus = !statusFilter
+      ? true
+      : statusFilter === 'not_marked'
+        ? !currentStatus
         : currentStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -242,9 +268,9 @@ export default function StaffAttendance() {
   };
 
   return (
-    <Layout 
-      title="Staff Attendance" 
-      subtitle="Mark, check-in, check-out, view biometric punches and manage staff daily attendance"
+    <Layout
+      title="Staff Attendance"
+      subtitle="Staff School Timings (Arrival & Departure Hours)"
       headerRight={
         records.length > 0 && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -268,76 +294,39 @@ export default function StaffAttendance() {
       {toast && <div className="alert alert-success alert-toast"><MdCheckCircle style={{ verticalAlign: 'middle', marginRight: 6 }} /> {toast}</div>}
 
       {/* School Timing Banner */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)',
-          border: '1px solid #bfdbfe',
-          borderRadius: 12,
-          padding: '14px 20px',
-          marginBottom: 18,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12
-        }}
-      >
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            background: '#3b82f6',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
-            flexShrink: 0
-          }}
-        >
-          <MdAccessTime size={22} />
-        </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a8a' }}>
-            Staff School Timings (Arrival & Departure Hours)
-          </div>
-          <div style={{ fontSize: 12, color: '#3b82f6' }}>
-            Check-in and check-out are recorded automatically from staff login & logout. If staff check in after school hours, their status is automatically set to <strong>Late</strong>.
-          </div>
-        </div>
-      </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <MdFilterList color="var(--text-muted)" />
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 12, marginBottom: 0 }}>Date:</label>
-            <input type="date" className="input" style={{ width: 150, padding: '7px 10px', fontSize: 13 }} value={date} onChange={(e) => setDate(e.target.value)} />
+        <div style={{ padding: '12px 18px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
+          <MdFilterList color="var(--text-muted)" size={18} style={{ flexShrink: 0 }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+            <label style={{ fontSize: 12, marginBottom: 0, fontWeight: 600 }}>Date:</label>
+            <input type="date" className="input" style={{ width: 130, padding: '6px 8px', fontSize: 12.5, height: 36 }} value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <select className="input" style={{ width: 125, padding: '6px 8px', fontSize: 12.5, height: 36, flexShrink: 0 }} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             {!isDedicatedBranchUser() && <option value="">All Branches</option>}
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
-          
-          <select className="input" style={{ width: 150, padding: '7px 10px', fontSize: 13 }} value={roleType} onChange={(e) => setRoleType(e.target.value)}>
+
+          <select className="input" style={{ width: 110, padding: '6px 8px', fontSize: 12.5, height: 36, flexShrink: 0 }} value={roleType} onChange={(e) => setRoleType(e.target.value)}>
             <option value="">All Roles</option>
             <option value="teaching">Teaching</option>
             <option value="non-teaching">Non-Teaching</option>
             <option value="management">Management</option>
           </select>
 
-          <div className="search-box" style={{ padding: '6px 12px' }}>
-            <MdSearch color="var(--text-muted)" />
-            <input 
-              placeholder="Search staff..." 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              style={{ width: 140 }}
+          <div className="search-box" style={{ padding: '5px 10px', height: 36, minWidth: 110, maxWidth: 150, flex: '1 1 110px' }}>
+            <MdSearch color="var(--text-muted)" size={18} />
+            <input
+              placeholder="Search staff..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ width: '100%', fontSize: 12.5 }}
             />
           </div>
 
-          <select className="input" style={{ width: 160, padding: '7px 10px', fontSize: 13 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="input" style={{ width: 120, padding: '6px 8px', fontSize: 12.5, height: 36, flexShrink: 0 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
             <option value="present">Present</option>
             <option value="absent">Absent</option>
@@ -347,10 +336,10 @@ export default function StaffAttendance() {
           </select>
 
           {records.length > 0 && (
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn btn-sm btn-success" onClick={() => markAll('present')}>✓ All Present</button>
-              <button className="btn btn-sm btn-danger" onClick={() => markAll('absent')}>✗ All Absent</button>
-              <button className="btn btn-sm btn-secondary" onClick={() => markAll('')}>Clear All</button>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+              <button className="btn btn-sm btn-success" onClick={() => markAll('present')} style={{ padding: '6px 10px', fontSize: 12, height: 36, whiteSpace: 'nowrap' }}>✓ All Present</button>
+              <button className="btn btn-sm btn-danger" onClick={() => markAll('absent')} style={{ padding: '6px 10px', fontSize: 12, height: 36, whiteSpace: 'nowrap' }}>✗ All Absent</button>
+              <button className="btn btn-sm btn-secondary" onClick={() => markAll('')} style={{ padding: '6px 10px', fontSize: 12, height: 36, whiteSpace: 'nowrap' }}>Clear All</button>
             </div>
           )}
         </div>
@@ -398,24 +387,24 @@ export default function StaffAttendance() {
                     </td>
                     <td>
                       <div>
-                        <div style={{ 
-                          fontSize: 13, 
-                          fontWeight: inTime ? 700 : 500, 
-                          color: inTime 
-                            ? (checkIsLate(inTime, r.expected_check_in || '09:00') ? '#b45309' : '#0f172a') 
-                            : 'var(--text-muted, #94a3b8)' 
+                        <div style={{
+                          fontSize: 13,
+                          fontWeight: inTime ? 700 : 500,
+                          color: inTime
+                            ? (checkIsLate(inTime, r.expected_check_in || '09:00') ? '#b45309' : '#0f172a')
+                            : 'var(--text-muted, #94a3b8)'
                         }}>
                           {inTime ? formatTime12(inTime) : '—'}
                           {inTime && checkIsLate(inTime, r.expected_check_in || '09:00') && (
-                            <span 
-                              style={{ 
-                                marginLeft: 6, 
-                                fontSize: 10, 
-                                padding: '2px 6px', 
-                                background: '#fef3c7', 
-                                color: '#b45309', 
-                                borderRadius: 4, 
-                                fontWeight: 700 
+                            <span
+                              style={{
+                                marginLeft: 6,
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                background: '#fef3c7',
+                                color: '#b45309',
+                                borderRadius: 4,
+                                fontWeight: 700
                               }}
                             >
                               Late
@@ -423,16 +412,16 @@ export default function StaffAttendance() {
                           )}
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                          Exp: {formatTime12(r.expected_check_in || '09:00')}
+                          Exp: {formatTime12(r.expected_check_in || '09:00')} <span style={{ color: '#64748b', fontSize: 9 }}>(+15m grace)</span>
                         </div>
                       </div>
                     </td>
                     <td>
                       <div>
-                        <div style={{ 
-                          fontSize: 13, 
-                          fontWeight: outTime ? 700 : 500, 
-                          color: outTime ? '#0f172a' : 'var(--text-muted, #94a3b8)' 
+                        <div style={{
+                          fontSize: 13,
+                          fontWeight: outTime ? 700 : 500,
+                          color: outTime ? '#0f172a' : 'var(--text-muted, #94a3b8)'
                         }}>
                           {outTime ? formatTime12(outTime) : '—'}
                         </div>
@@ -442,17 +431,17 @@ export default function StaffAttendance() {
                       </div>
                     </td>
                     <td>
-                      <select 
-                        className="input" 
-                        style={{ 
-                          padding: '6px 10px', 
-                          fontSize: 13, 
-                          width: 125, 
+                      <select
+                        className="input"
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: 13,
+                          width: 125,
                           background: getVal(r, 'status') === 'present' ? '#f0fdf4' : getVal(r, 'status') === 'absent' ? '#fef2f2' : getVal(r, 'status') === 'late' ? '#fffbeb' : getVal(r, 'status') === 'half-day' ? '#faf5ff' : 'var(--bg, #ffffff)',
-                          color: getVal(r, 'status') === 'present' ? '#15803d' : getVal(r, 'status') === 'absent' ? '#dc2626' : getVal(r, 'status') === 'late' ? '#d97706' : getVal(r, 'status') === 'half-day' ? '#7e22ce' : 'var(--text-muted, #94a3b8)', 
-                          fontWeight: getVal(r, 'status') ? 700 : 400 
+                          color: getVal(r, 'status') === 'present' ? '#15803d' : getVal(r, 'status') === 'absent' ? '#dc2626' : getVal(r, 'status') === 'late' ? '#d97706' : getVal(r, 'status') === 'half-day' ? '#7e22ce' : 'var(--text-muted, #94a3b8)',
+                          fontWeight: getVal(r, 'status') ? 700 : 400
                         }}
-                        value={getVal(r, 'status')} 
+                        value={getVal(r, 'status')}
                         disabled={isReadOnly}
                         onChange={(e) => updateChange(r.id, 'status', e.target.value)}
                       >
@@ -464,8 +453,8 @@ export default function StaffAttendance() {
                       </select>
                     </td>
                     <td>
-                      <button 
-                        className="btn btn-sm btn-secondary" 
+                      <button
+                        className="btn btn-sm btn-secondary"
                         onClick={() => openPunchesModal(r)}
                         title="View Biometric & Mobile Attendance Punches"
                         style={{ background: '#f3e8ff', color: '#7e22ce', border: '1px solid #d8b4fe', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -540,13 +529,13 @@ export default function StaffAttendance() {
                     Total punches: {punches.length}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {punches.map(p => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, fontFamily: 'monospace', color: 'var(--text-main)' }}>
-                        {p.time}
+                    {punches.map(p => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                          {p.time}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                   </div>
                 </div>
               );

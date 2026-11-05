@@ -1,0 +1,2872 @@
+const fs = require('fs');
+const path = require('path');
+const { execFile } = require('child_process');
+
+console.log('Generating updated School Management System Demo Walkthrough PDF (Web Portal Only)...');
+
+// High-fidelity SVG icons matching the React icons in the frontend
+const icons = {
+  school: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`,
+  dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>`,
+  branches: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg>`,
+  branchGroups: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="6" x2="10" y2="10"/><line x1="14" y1="14" x2="17" y2="18"/></svg>`,
+  admins: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  academicData: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>`,
+  academicGroups: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+  classes: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`,
+  staff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  students: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>`,
+  timetable: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  studentAtt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>`,
+  staffAtt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>`,
+  leaves: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`,
+  holidays: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  notices: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`,
+  bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`
+};
+
+// Reusable High-Fidelity Browser Mockup Generator
+function renderBrowser(activeNav, title, subtitle, contentHtml, options = {}) {
+  const url = options.url || ('https://vts.schoolmgmt.com' + (activeNav ? '/' + activeNav : ''));
+  const isSuperAdmin = options.isSuperAdmin || false;
+  const rightActions = options.rightActions || '';
+
+  // Actual sidebar sections and items from frontend/src/components/Sidebar.jsx
+  const sections = [
+    {
+      title: 'OVERVIEW',
+      items: [
+        { key: 'dashboard', label: 'Dashboard', icon: icons.dashboard }
+      ]
+    },
+    {
+      title: 'ORGANISATION',
+      items: [
+        { key: 'branches', label: 'Branches', icon: icons.branches },
+        { key: 'branch-groups', label: 'Branch Groups', icon: icons.branchGroups },
+        { key: 'admins', label: 'Admin Users', icon: icons.admins },
+        { key: 'settings', label: 'Settings', icon: icons.settings }
+      ]
+    },
+    {
+      title: 'ACADEMIC ADMINISTRATOR',
+      items: [
+        { key: 'academic-data', label: 'Academic Data', icon: icons.academicData }
+      ]
+    },
+    {
+      title: 'ACADEMIC',
+      items: [
+        { key: 'academic-groups', label: 'Academic Groups', icon: icons.academicGroups },
+        { key: 'classes', label: 'Classes', icon: icons.classes },
+        { key: 'staff', label: 'Staff', icon: icons.staff },
+        { key: 'students', label: 'Students', icon: icons.students }
+      ]
+    },
+    {
+      title: 'ATTENDANCE',
+      items: [
+        { key: 'timetable-setup', label: 'Timetable Setup', icon: icons.timetable },
+        { key: 'attendance/students', label: 'Student Attendance', icon: icons.studentAtt },
+        { key: 'attendance/staff', label: 'Staff Attendance', icon: icons.staffAtt }
+      ]
+    },
+    {
+      title: 'MANAGEMENT',
+      items: [
+        { key: 'leaves', label: 'Leave Management', icon: icons.leaves },
+        { key: 'holidays', label: 'Holidays', icon: icons.holidays },
+        { key: 'notices', label: 'Notices', icon: icons.notices }
+      ]
+    }
+  ];
+
+  return `
+    <div class="web-browser-frame">
+      <div class="browser-topbar">
+        <div class="traffic-dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div class="url-pill">
+          <span class="lock-icon">${icons.lock}</span>
+          ${url}
+        </div>
+        <div style="width:50px"></div>
+      </div>
+      <div class="browser-body">
+        ${!isSuperAdmin ? `
+          <div class="browser-sidebar">
+            <div class="sidebar-logo">
+              <div class="sidebar-logo-icon">
+                ${icons.school}
+              </div>
+              <div class="sidebar-logo-text">
+                <div class="sidebar-logo-title">Venkat Training School</div>
+                <div class="sidebar-logo-sub">Management Portal</div>
+              </div>
+            </div>
+
+            <div class="sidebar-nav">
+              ${sections.map(sec => `
+                <div class="sidebar-section-title">${sec.title}</div>
+                ${sec.items.map(item => `
+                  <div class="sidebar-link ${item.key === activeNav ? 'active' : ''}">
+                    <span class="sidebar-link-icon">${item.icon}</span>
+                    <span>${item.label}</span>
+                  </div>
+                `).join('')}
+              `).join('')}
+            </div>
+
+            <div class="sidebar-footer">
+              <div class="sidebar-user">
+                <div class="sidebar-avatar">VK</div>
+                <div class="sidebar-user-info">
+                  <div class="sidebar-user-name">Venkat Kumar</div>
+                  <div class="sidebar-user-role">Administrator</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <div class="browser-sidebar super-sidebar">
+            <div class="sidebar-logo">
+              <div class="sidebar-logo-icon super-icon">
+                ${icons.admins}
+              </div>
+              <div class="sidebar-logo-text">
+                <div class="sidebar-logo-title">ACS Cloud Governor</div>
+                <div class="sidebar-logo-sub">SuperAdmin Master</div>
+              </div>
+            </div>
+            <div class="sidebar-nav">
+              <div class="sidebar-section-title">GLOBAL PLATFORM</div>
+              <div class="sidebar-link active">
+                <span class="sidebar-link-icon">${icons.dashboard}</span>
+                <span>Tenant Organisations</span>
+              </div>
+              <div class="sidebar-link">
+                <span class="sidebar-link-icon">${icons.settings}</span>
+                <span>System Health & Logs</span>
+              </div>
+              <div class="sidebar-link">
+                <span class="sidebar-link-icon">${icons.admins}</span>
+                <span>Master Admins</span>
+              </div>
+            </div>
+            <div class="sidebar-footer">
+              <div class="sidebar-user">
+                <div class="sidebar-avatar" style="background:#0284c7">SA</div>
+                <div class="sidebar-user-info">
+                  <div class="sidebar-user-name">Super Administrator</div>
+                  <div class="sidebar-user-role">Platform Governor</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `}
+
+        <div class="main-viewport">
+          <div class="header">
+            <div class="header-left">
+              <div>
+                <div class="page-title">${title}</div>
+                ${subtitle ? `<div class="page-subtitle">${subtitle}</div>` : ''}
+              </div>
+            </div>
+            <div class="header-right">
+              ${!isSuperAdmin ? `
+                <div class="branch-select-pill">
+                  <span style="opacity:0.6;font-size:11px;margin-right:4px">Branch:</span>
+                  <strong>Main Campus</strong>
+                  <span style="font-size:9px;margin-left:4px">▼</span>
+                </div>
+                <div class="header-bell">
+                  ${icons.bell}
+                  <span class="bell-badge">2</span>
+                </div>
+              ` : `
+                <div class="super-badge">ROOT ACCESS MODE</div>
+              `}
+              ${rightActions}
+            </div>
+          </div>
+
+          <div class="page-content">
+            ${contentHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Render 4 Numbered Instruction Cards Stack
+function renderCards(steps) {
+  return `
+    <div class="steps-stack">
+      ${steps.map((s, idx) => `
+        <div class="instruction-card">
+          <div class="step-number">${idx + 1}</div>
+          <div class="step-content">
+            <span class="step-title">${s.title}:</span> ${s.desc}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// =========================================================================
+// DEFINITION OF ALL 26 PAGES (Cover + 25 Screens)
+// =========================================================================
+
+const pages = [];
+
+// -------------------------------------------------------------
+// PAGE 1: COVER PAGE
+// -------------------------------------------------------------
+pages.push({
+  isCover: true,
+  html: `
+    <div class="cover-top-bar"></div>
+    <div class="cover-center">
+      <div class="cover-app-icon">
+        <div class="icon-inner">
+          ${icons.school}
+        </div>
+      </div>
+      <h1 class="cover-title">ACS School Management</h1>
+      <h2 class="cover-subtitle">Complete Application Walkthrough</h2>
+      <p class="cover-tagline">Web Management Dashboard & Administrative Portal User Guide</p>
+    </div>
+    <div class="cover-bottom">
+      <div class="cover-badge">Central Educational Operating System · Web Application Walkthrough · Version 2.0</div>
+    </div>
+  `
+});
+
+// -------------------------------------------------------------
+// PAGE 2: SCREEN 1 - WEB PORTAL SIGN-IN
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · AUTHENTICATION · SCREEN 1 OF 25',
+  title: '1. Web Portal Sign-In',
+  desc: 'The school administrative portal is accessed via web browser and validates organization code, username, and encrypted password.',
+  pageNumber: 2,
+  steps: [
+    { title: 'Open the portal URL', desc: 'Navigate to the institutional login endpoint in any modern desktop browser (e.g., https://vts.schoolmgmt.com/login).' },
+    { title: 'Enter organisation credentials', desc: 'Input the school code (vts), administrative username (venkat), and password.' },
+    { title: 'Secure JWT verification', desc: 'The backend verifies credentials via Bcrypt and issues an authenticated role-based session token.' },
+    { title: 'Automatic role routing', desc: 'Upon successful authentication, the user is redirected to the Executive Dashboard with permissions applied.' }
+  ],
+  mockup: renderBrowser('', 'School Administrative Login', 'Sign in to access management console', `
+    <div style="display:flex;height:100%;align-items:center;justify-content:center;background:#f8fafc;padding:30px 0;">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;width:380px;padding:28px 24px;box-shadow:0 12px 30px rgba(0,0,0,0.06)">
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="width:48px;height:48px;background:linear-gradient(135deg, #6366f1, #8b5cf6);color:#fff;border-radius:12px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center">
+            <span style="width:26px;height:26px">${icons.school}</span>
+          </div>
+          <div style="font-size:17px;font-weight:800;color:#0f172a">School Portal Sign-In</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">Venkat Training School Management</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase">Organisation Code</label>
+          <div style="border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:4px;font-weight:700;color:#0f172a;background:#f8fafc">vts</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase">Admin Username</label>
+          <div style="border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:4px;color:#0f172a;background:#fff">venkat</div>
+        </div>
+        <div style="margin-bottom:18px">
+          <label style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase">Password</label>
+          <div style="border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:4px;color:#0f172a;background:#fff;display:flex;justify-content:space-between">
+            <span>••••••••••••</span>
+            <span style="color:#94a3b8;font-size:11px">👁️</span>
+          </div>
+        </div>
+        <button style="width:100%;background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">
+          Sign In to Portal &rarr;
+        </button>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 3: SCREEN 2 - EXECUTIVE DASHBOARD
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · HOME · SCREEN 2 OF 25',
+  title: '2. Executive Dashboard Overview',
+  desc: 'The central dashboard provides real-time visibility into student & faculty attendance, active classes, and urgent school notices.',
+  pageNumber: 3,
+  steps: [
+    { title: 'Inspect key KPI metric cards', desc: 'Four summary cards show Total Students (128), Total Staff (14), Active Classes (6), and Today’s Attendance (94.2%).' },
+    { title: 'Interactive attendance visualizer', desc: 'The dynamic donut chart renders today’s proportion of Present, Absent, and Late attendance records.' },
+    { title: 'Filter by campus & class', desc: 'Select a specific campus branch or grade class from cascading dropdowns to recompute attendance metrics instantly.' },
+    { title: 'Review live notice feed', desc: 'The right pane displays the school bulletin with latest notices, circulars, and administrative reminders.' }
+  ],
+  mockup: renderBrowser('dashboard', 'Dashboard', 'Real-time overview and analytical insights', `
+    <div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#eff6ff;color:#3b82f6">${icons.students}</div>
+          <div class="stat-info">
+            <div class="stat-value">128</div>
+            <div class="stat-label">Total Students</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0fdf4;color:#10b981">${icons.staff}</div>
+          <div class="stat-info">
+            <div class="stat-value">14</div>
+            <div class="stat-label">Total Staff</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fefce8;color:#eab308">${icons.classes}</div>
+          <div class="stat-info">
+            <div class="stat-value">6</div>
+            <div class="stat-label">Active Classes</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fdf4ff;color:#a855f7">${icons.studentAtt}</div>
+          <div class="stat-info">
+            <div class="stat-value" style="color:#10b981">94.2%</div>
+            <div class="stat-label">Today's Attendance</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Daily Attendance Breakdown</div>
+            <span style="font-size:10px;color:#64748b">Date: 2026-11-05</span>
+          </div>
+          <div class="card-body" style="display:flex;align-items:center;justify-content:space-around;padding:16px">
+            <div style="width:90px;height:90px;border-radius:50%;background:conic-gradient(#10b981 0% 88%, #f59e0b 88% 94%, #ef4444 94% 100%);display:flex;align-items:center;justify-content:center">
+              <div style="width:62px;height:62px;background:#fff;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                <span style="font-size:14px;font-weight:800;color:#0f172a">94.2%</span>
+                <span style="font-size:8px;color:#64748b">Present</span>
+              </div>
+            </div>
+            <div style="font-size:10px;line-height:2">
+              <div><span style="display:inline-block;width:9px;height:9px;background:#10b981;border-radius:3px;margin-right:6px"></span>Present: <strong>121 Students</strong></div>
+              <div><span style="display:inline-block;width:9px;height:9px;background:#f59e0b;border-radius:3px;margin-right:6px"></span>Late: <strong>4 Students</strong></div>
+              <div><span style="display:inline-block;width:9px;height:9px;background:#ef4444;border-radius:3px;margin-right:6px"></span>Absent: <strong>3 Students</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Notices</div>
+            <span style="font-size:10px;color:#4f46e5;font-weight:600">View All</span>
+          </div>
+          <div class="card-body" style="padding:10px 14px">
+            <div style="background:#f8fafc;padding:8px 10px;border-radius:8px;margin-bottom:6px;border-left:3px solid #3b82f6">
+              <div style="font-size:10.5px;font-weight:700;color:#0f172a">Mid-Term Timetable Published</div>
+              <div style="font-size:9px;color:#64748b">Audience: All Classes · 2 days ago</div>
+            </div>
+            <div style="background:#f8fafc;padding:8px 10px;border-radius:8px;border-left:3px solid #10b981">
+              <div style="font-size:10.5px;font-weight:700;color:#0f172a">Annual Sports Meet Schedule</div>
+              <div style="font-size:9px;color:#64748b">Audience: Campus Wide · Today</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 4: SCREEN 3 - BRANCHES MANAGEMENT
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · BRANCHES · SCREEN 3 OF 25',
+  title: '3. Campus Branches Management',
+  desc: 'Institutions operating across multiple sites manage their campuses, addresses, contact persons, and geofence radii here.',
+  pageNumber: 4,
+  steps: [
+    { title: 'Open Branches registry', desc: 'Click Branches in the left navigation sidebar to view all registered campuses.' },
+    { title: 'Inspect branch details', desc: 'Columns display Campus Name, Branch Code, In-Charge Person, Phone, and Status (Active).' },
+    { title: 'Add a new campus', desc: 'Click Add Branch to specify campus name, code (e.g., MAIN, NORTH), address, and GPS coordinates.' },
+    { title: 'Geofence radius configuration', desc: 'Set location radius in meters to validate device punch submissions against campus bounds.' }
+  ],
+  mockup: renderBrowser('branches', 'Branches', 'Manage school branches, locations, and contact persons', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box">
+            <span class="search-icon">${icons.search}</span>
+            <input placeholder="Search branches...">
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Add Branch</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Branch Code</th>
+              <th>Branch Name</th>
+              <th>Contact Person</th>
+              <th>Phone</th>
+              <th>Address</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>MAIN</strong></td>
+              <td>Main Campus</td>
+              <td>Venkat Kumar</td>
+              <td>+91-9876543210</td>
+              <td>123 Main Street, Hyderabad</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>NORTH</strong></td>
+              <td>North Branch</td>
+              <td>Ravi Sharma</td>
+              <td>+91-9876543211</td>
+              <td>45 North Avenue, Secunderabad</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>SOUTH</strong></td>
+              <td>South Branch</td>
+              <td>Priya Reddy</td>
+              <td>+91-9876543212</td>
+              <td>78 South Road, Hyderabad</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 5: SCREEN 4 - REGIONAL BRANCH GROUPS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · BRANCH GROUPS · SCREEN 4 OF 25',
+  title: '4. Regional Branch Groups',
+  desc: 'Branch Groups cluster multiple physical campuses into administrative zones or regional clusters for aggregated reporting.',
+  pageNumber: 5,
+  steps: [
+    { title: 'Navigate to Branch Groups', desc: 'Select Branch Groups under the Organisation section of the sidebar.' },
+    { title: 'Create geographic clusters', desc: 'Group branches into logical tiers such as "Metro Hyderabad Campuses" or "Zone 1 Schools".' },
+    { title: 'Assign member campuses', desc: 'Use checkboxes to associate specific branches to each group cluster.' },
+    { title: 'Aggregated oversight', desc: 'Enables regional directors to view aggregated attendance and staff reports across their group.' }
+  ],
+  mockup: renderBrowser('branch-groups', 'Branch Groups', 'Manage branch groupings for multi-campus administrative oversight', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box">
+            <span class="search-icon">${icons.search}</span>
+            <input placeholder="Search branch groups...">
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Create Branch Group</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="card" style="padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:700;color:#0f172a">Zone 1 · Metro Campuses</div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <div style="font-size:10px;color:#64748b;margin-bottom:12px">Primary metropolitan campuses under unified operational guidelines.</div>
+          <div style="font-size:10px;font-weight:700;color:#0f172a;margin-bottom:6px">Assigned Member Branches (2):</div>
+          <div style="display:flex;gap:6px">
+            <span class="badge badge-purple">Main Campus</span>
+            <span class="badge badge-purple">North Branch</span>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid #f1f5f9;padding-top:10px">
+            <span class="action-btn">Edit Members</span>
+            <span class="action-btn danger">Delete Group</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:700;color:#0f172a">Zone 2 · Secondary Centers</div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <div style="font-size:10px;color:#64748b;margin-bottom:12px">Secondary satellite campuses and technical branches.</div>
+          <div style="font-size:10px;font-weight:700;color:#0f172a;margin-bottom:6px">Assigned Member Branches (1):</div>
+          <div style="display:flex;gap:6px">
+            <span class="badge badge-purple">South Branch</span>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid #f1f5f9;padding-top:10px">
+            <span class="action-btn">Edit Members</span>
+            <span class="action-btn danger">Delete Group</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 6: SCREEN 5 - ADMIN USERS & RBAC
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · ADMIN USERS · SCREEN 5 OF 25',
+  title: '5. Admin Users & Role-Based Access Control',
+  desc: 'Manage administrator accounts, assign access privilege tiers, and configure branch-scoped visibility.',
+  pageNumber: 6,
+  steps: [
+    { title: 'Open Admin Users directory', desc: 'Displays all staff members with portal management permissions and their security tier.' },
+    { title: 'Choose access role', desc: 'Select Full Access (Admin), Read and Write (Manager), or Only Read Access (Viewer).' },
+    { title: 'Configure branch scope', desc: 'Assign All Branches for central executives or restrict access strictly to a single campus.' },
+    { title: 'Manage account security', desc: 'Create new users with Bcrypt hashed passwords, reset credentials, or deactivate accounts.' }
+  ],
+  mockup: renderBrowser('admins', 'Admin Users', 'Manage administrator accounts and role-based permissions', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box">
+            <span class="search-icon">${icons.search}</span>
+            <input placeholder="Search admins...">
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Add Admin</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Full Name</th>
+              <th>Email</th>
+              <th>Role Tier</th>
+              <th>Branch Access Scope</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>venkat</strong></td>
+              <td>Venkat Kumar</td>
+              <td>venkat@vts.edu.in</td>
+              <td><span class="badge badge-purple">Full Access (Admin)</span></td>
+              <td><span class="badge badge-blue">All Branches</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Reset Key</span></td>
+            </tr>
+            <tr>
+              <td><strong>ravi.manager</strong></td>
+              <td>Ravi Sharma</td>
+              <td>ravi@vts.edu.in</td>
+              <td><span class="badge badge-blue">Read & Write (Manager)</span></td>
+              <td>North Branch Only</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Reset Key</span></td>
+            </tr>
+            <tr>
+              <td><strong>suresh.auditor</strong></td>
+              <td>Suresh Rao</td>
+              <td>suresh@vts.edu.in</td>
+              <td><span class="badge badge-gray">Only Read (Viewer)</span></td>
+              <td><span class="badge badge-blue">All Branches</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Reset Key</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 7: SCREEN 6 - ACADEMIC GROUPS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · ACADEMIC GROUPS · SCREEN 6 OF 25',
+  title: '6. Academic Groups & Educational Stages',
+  desc: 'Define institutional academic divisions (e.g. Primary, Secondary, Higher Secondary) that group classes together.',
+  pageNumber: 7,
+  steps: [
+    { title: 'Open Academic Groups', desc: 'Select Academic Groups under the Academic section of the sidebar.' },
+    { title: 'Review educational stages', desc: 'View defined groups: Primary (Classes 1 to 5), Secondary (6 to 10), Higher Secondary (11 to 12).' },
+    { title: 'Create a new group', desc: 'Click Add Academic Group to specify category name, description, and applicable grade levels.' },
+    { title: 'Curricular segregation', desc: 'Provides structural grouping for timetables, subject policies, and grade-stage reports.' }
+  ],
+  mockup: renderBrowser('academic-groups', 'Academic Groups', 'Organise classes into academic divisions and stages', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box">
+            <span class="search-icon">${icons.search}</span>
+            <input placeholder="Search academic groups...">
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Add Academic Group</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Group Name</th>
+              <th>Description</th>
+              <th>Linked Class Count</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Primary</strong></td>
+              <td>Classes 1 to 5 (Foundational Education Stage)</td>
+              <td>2 Classes</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>Secondary</strong></td>
+              <td>Classes 6 to 10 (Secondary High School Division)</td>
+              <td>3 Classes</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>Higher Secondary</strong></td>
+              <td>Classes 11 to 12 (Junior College & Senior Secondary)</td>
+              <td>1 Class</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 8: SCREEN 7 - CLASSES & SECTIONS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · CLASSES · SCREEN 7 OF 25',
+  title: '7. Classes & Sections Management',
+  desc: 'Create classrooms, specify sections, set student capacity limits, and assign responsible class teachers.',
+  pageNumber: 8,
+  steps: [
+    { title: 'Open Classes directory', desc: 'Browse all class sections across campuses with enrolled student counts.' },
+    { title: 'Class & section attributes', desc: 'Each entry tracks Class Name (e.g. Class 10), Section (A), Campus Branch, and Capacity.' },
+    { title: 'Assign designated class teacher', desc: 'Link a faculty member from the staff directory as the head teacher for that classroom.' },
+    { title: 'Filter by branch', desc: 'Campus heads immediately see only the classrooms housed within their assigned facility.' }
+  ],
+  mockup: renderBrowser('classes', 'Classes', 'Manage classrooms, sections, capacity, and assigned class teachers', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box">
+            <span class="search-icon">${icons.search}</span>
+            <input placeholder="Search classes...">
+          </div>
+          <select class="input-select"><option>All Branches</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Create Class</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Class Name</th>
+              <th>Section</th>
+              <th>Academic Group</th>
+              <th>Branch</th>
+              <th>Class Teacher</th>
+              <th>Enrolled / Capacity</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Class 1</strong></td>
+              <td>A</td>
+              <td>Primary</td>
+              <td>Main Campus</td>
+              <td>Kiran Babu</td>
+              <td><span class="badge badge-blue">32 / 40 Students</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>Class 2</strong></td>
+              <td>A</td>
+              <td>Primary</td>
+              <td>Main Campus</td>
+              <td>Meena Kumari</td>
+              <td><span class="badge badge-blue">28 / 40 Students</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>Class 6</strong></td>
+              <td>A</td>
+              <td>Secondary</td>
+              <td>Main Campus</td>
+              <td>Ananya Iyer</td>
+              <td><span class="badge badge-blue">33 / 40 Students</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>Class 10</strong></td>
+              <td>A</td>
+              <td>Secondary</td>
+              <td>Main Campus</td>
+              <td>Ananya Iyer</td>
+              <td><span class="badge badge-blue">35 / 40 Students</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 9: SCREEN 8 - FACULTY & STAFF DIRECTORY
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · STAFF · SCREEN 8 OF 25',
+  title: '8. Faculty & Staff Directory',
+  desc: 'Maintain complete faculty profiles, designations, contact details, campus assignments, and role categories.',
+  pageNumber: 9,
+  steps: [
+    { title: 'Access Staff Directory', desc: 'Click Staff in the sidebar to review all teachers, administrators, and support personnel.' },
+    { title: 'Role categorization', desc: 'Filter faculty by Role Type: Teaching, Non-Teaching, and Management.' },
+    { title: 'Onboard new staff member', desc: 'Input Staff ID (e.g. STF001), Full Name, Official Email, Phone Number, and Designation.' },
+    { title: 'Bulk export', desc: 'Download complete employee roster details in certified CSV format with a single click.' }
+  ],
+  mockup: renderBrowser('staff', 'Staff Directory', 'Manage faculty, employment records, designations, and class assignments', `
+    <div>
+      <div class="stats-grid" style="margin-bottom:14px">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#eff6ff;color:#3b82f6">${icons.staff}</div>
+          <div class="stat-info"><div class="stat-value">14</div><div class="stat-label">Total Staff</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0fdf4;color:#10b981">${icons.check}</div>
+          <div class="stat-info"><div class="stat-value" style="color:#10b981">14</div><div class="stat-label">Active Staff</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fefce8;color:#eab308">${icons.school}</div>
+          <div class="stat-info"><div class="stat-value">11</div><div class="stat-label">Teaching Faculty</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fdf4ff;color:#a855f7">${icons.user}</div>
+          <div class="stat-info"><div class="stat-value">3</div><div class="stat-label">Non-Teaching Staff</div></div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box"><span class="search-icon">${icons.search}</span><input placeholder="Search staff..."></div>
+          <select class="input-select"><option>All Roles</option></select>
+          <select class="input-select"><option>All Branches</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-secondary"><span style="margin-right:4px">${icons.download}</span> Export CSV</button>
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Add Staff</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Staff ID</th>
+              <th>Full Name</th>
+              <th>Designation</th>
+              <th>Role Type</th>
+              <th>Branch</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>STF001</strong></td>
+              <td>Ananya Iyer</td>
+              <td>Senior Teacher (Mathematics)</td>
+              <td><span class="badge badge-blue">Teaching</span></td>
+              <td>Main Campus</td>
+              <td>+91-9876543220</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Assign</span></td>
+            </tr>
+            <tr>
+              <td><strong>STF002</strong></td>
+              <td>Kiran Babu</td>
+              <td>Teacher (Science)</td>
+              <td><span class="badge badge-blue">Teaching</span></td>
+              <td>Main Campus</td>
+              <td>+91-9876543221</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Assign</span></td>
+            </tr>
+            <tr>
+              <td><strong>STF003</strong></td>
+              <td>Meena Kumari</td>
+              <td>Office Administrator</td>
+              <td><span class="badge badge-gray">Non-Teaching</span></td>
+              <td>Main Campus</td>
+              <td>+91-9876543222</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Assign</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 10: SCREEN 9 - ONBOARD STAFF MODAL FORM
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · STAFF · SCREEN 9 OF 25',
+  title: '9. Onboard Faculty & Staff Form',
+  desc: 'Clicking Add Staff launches the full employee registration modal with shift times and teaching allocations.',
+  pageNumber: 10,
+  steps: [
+    { title: 'Open registration modal', desc: 'Clicking + Add Staff opens the dialog over the dimmed staff directory.' },
+    { title: 'Fill identity & credentials', desc: 'Enter Staff ID, First Name, Last Name, Official Email, Username, and Password.' },
+    { title: 'Select role & branch', desc: 'Choose between Teaching, Non-Teaching, or Management, and allocate the primary campus.' },
+    { title: 'Define expected shift hours', desc: 'Specify Expected Check-In (e.g. 09:00 AM) and Check-Out (05:00 PM) for attendance tracking.' }
+  ],
+  mockup: renderBrowser('staff', 'Staff Directory', 'Manage faculty, employment records, designations, and class assignments', `
+    <div class="modal-backdrop">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">Add New Staff Member</div>
+          <span style="font-size:16px;color:#94a3b8;cursor:pointer">✕</span>
+        </div>
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label class="form-label">STAFF ID *</label>
+              <div class="form-input">STF005</div>
+            </div>
+            <div>
+              <label class="form-label">FULL NAME *</label>
+              <div class="form-input">Rajesh Varma</div>
+            </div>
+            <div>
+              <label class="form-label">OFFICIAL EMAIL *</label>
+              <div class="form-input">rajesh@vts.edu.in</div>
+            </div>
+            <div>
+              <label class="form-label">PHONE NUMBER *</label>
+              <div class="form-input">+91-9876543224</div>
+            </div>
+            <div>
+              <label class="form-label">ROLE TYPE *</label>
+              <div class="form-input">Teaching Faculty</div>
+            </div>
+            <div>
+              <label class="form-label">DESIGNATION *</label>
+              <div class="form-input">Physics Lecturer</div>
+            </div>
+            <div>
+              <label class="form-label">ASSIGNED BRANCH *</label>
+              <div class="form-input">Main Campus</div>
+            </div>
+            <div>
+              <label class="form-label">EXPECTED SHIFT *</label>
+              <div class="form-input">09:00 AM - 05:00 PM</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm">Cancel</button>
+          <button class="btn btn-primary btn-sm">Create Staff Record &rarr;</button>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 11: SCREEN 10 - STUDENT ROSTER & BIOMETRIC STATUS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · STUDENTS · SCREEN 10 OF 25',
+  title: '10. Student Roster & Biometric Status',
+  desc: 'Manage student enrollment records, parent contact details, and monitor biometric face vector registration status.',
+  pageNumber: 11,
+  steps: [
+    { title: 'View Student Directory', desc: 'Browse enrolled students with Admission Number, Roll Number, Class, and Parent information.' },
+    { title: 'Face Biometric indicator', desc: 'A dedicated badge highlights whether the student’s facial embedding is Enrolled (ready for camera scan) or Pending.' },
+    { title: 'Bulk CSV roster upload', desc: 'Upload hundreds of students in seconds via the integrated CSV importer with automatic class mapping.' },
+    { title: 'Emergency parent contacts', desc: 'Access parent phone numbers and email details directly for automated attendance SMS notifications.' }
+  ],
+  mockup: renderBrowser('students', 'Students', 'Manage student enrollment, profiles, and academic records', `
+    <div>
+      <div class="stats-grid" style="margin-bottom:14px">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#eff6ff;color:#3b82f6">${icons.students}</div>
+          <div class="stat-info"><div class="stat-value">128</div><div class="stat-label">Total Students</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0fdf4;color:#10b981">${icons.check}</div>
+          <div class="stat-info"><div class="stat-value" style="color:#10b981">128</div><div class="stat-label">Active Students</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fefce8;color:#eab308">${icons.user}</div>
+          <div class="stat-info"><div class="stat-value">68</div><div class="stat-label">Male Students</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fdf4ff;color:#a855f7">${icons.user}</div>
+          <div class="stat-info"><div class="stat-value">60</div><div class="stat-label">Female Students</div></div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box"><span class="search-icon">${icons.search}</span><input placeholder="Search students..."></div>
+          <select class="input-select"><option>Class 10 (A)</option></select>
+          <select class="input-select"><option>All Status</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-secondary"><span style="margin-right:4px">${icons.download}</span> Export CSV</button>
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Enroll Student</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Adm No</th>
+              <th>Roll</th>
+              <th>Student Name</th>
+              <th>Class / Sec</th>
+              <th>Parent Name</th>
+              <th>Parent Phone</th>
+              <th>Biometric Face</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>ADM2024001</strong></td>
+              <td>101</td>
+              <td>Aarav Singh</td>
+              <td>Class 10 (A)</td>
+              <td>Ramesh Singh</td>
+              <td>+91-9876543230</td>
+              <td><span class="badge badge-success">✓ Enrolled (Face Ready)</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Profile</span></td>
+            </tr>
+            <tr>
+              <td><strong>ADM2024002</strong></td>
+              <td>102</td>
+              <td>Diya Patel</td>
+              <td>Class 10 (A)</td>
+              <td>Amit Patel</td>
+              <td>+91-9876543231</td>
+              <td><span class="badge badge-success">✓ Enrolled (Face Ready)</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Profile</span></td>
+            </tr>
+            <tr>
+              <td><strong>ADM2024003</strong></td>
+              <td>103</td>
+              <td>Arjun Reddy</td>
+              <td>Class 10 (A)</td>
+              <td>Ravi Reddy</td>
+              <td>+91-9876543232</td>
+              <td><span class="badge badge-warning">⚠ Pending Biometrics</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Profile</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 12: SCREEN 11 - ENROLL STUDENT MODAL FORM
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · STUDENTS · SCREEN 11 OF 25',
+  title: '11. Enroll New Student Modal Form',
+  desc: 'The enrollment form collects student identification, classroom assignment, and parent emergency contact details.',
+  pageNumber: 12,
+  steps: [
+    { title: 'Open enrollment dialog', desc: 'Click + Enroll Student to open the student registration modal dialog.' },
+    { title: 'Assign student identifiers', desc: 'Enter unique Admission Number (e.g. ADM2024005), Roll Number, and Full Legal Name.' },
+    { title: 'Select class & section', desc: 'Pick the campus branch and assign the classroom section (e.g. Class 10 - Section A).' },
+    { title: 'Parent emergency contact', desc: 'Record father/mother name and mobile phone number for automated SMS notifications.' }
+  ],
+  mockup: renderBrowser('students', 'Students', 'Manage student enrollment, profiles, and academic records', `
+    <div class="modal-backdrop">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">Enroll New Student</div>
+          <span style="font-size:16px;color:#94a3b8;cursor:pointer">✕</span>
+        </div>
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label class="form-label">ADMISSION NUMBER *</label>
+              <div class="form-input">ADM2024005</div>
+            </div>
+            <div>
+              <label class="form-label">ROLL NUMBER *</label>
+              <div class="form-input">104</div>
+            </div>
+            <div>
+              <label class="form-label">FULL LEGAL NAME *</label>
+              <div class="form-input">Ananya Sharma</div>
+            </div>
+            <div>
+              <label class="form-label">GENDER *</label>
+              <div class="form-input">Female</div>
+            </div>
+            <div>
+              <label class="form-label">BRANCH CAMPUS *</label>
+              <div class="form-input">Main Campus</div>
+            </div>
+            <div>
+              <label class="form-label">CLASS & SECTION *</label>
+              <div class="form-input">Class 10 (Section A)</div>
+            </div>
+            <div>
+              <label class="form-label">PARENT / GUARDIAN NAME *</label>
+              <div class="form-input">Sanjay Sharma</div>
+            </div>
+            <div>
+              <label class="form-label">PARENT MOBILE NUMBER *</label>
+              <div class="form-input">+91-9876543235</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm">Cancel</button>
+          <button class="btn btn-primary btn-sm">Save & Register Student &rarr;</button>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 13: SCREEN 12 - TIMETABLE SETUP (ORG DEFAULT AM/PM)
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · TIMETABLE · SCREEN 12 OF 25',
+  title: '12. Timetable Setup — Org Default AM/PM',
+  desc: 'Configure organization-wide default Morning (AM) and Evening (PM) session timings for general daily attendance.',
+  pageNumber: 13,
+  steps: [
+    { title: 'Open Timetable Setup', desc: 'Navigate to Timetable Setup under the Attendance section in the sidebar.' },
+    { title: 'Select Morning & Evening tab', desc: 'Displays default session timing parameters configured across the entire institution.' },
+    { title: 'Define AM & PM window hours', desc: 'Set Morning check-in (09:00 – 09:30 AM) and Evening departure check-out (03:30 – 04:00 PM).' },
+    { title: 'Save organisation default', desc: 'Click Save Settings. All standard classrooms automatically adhere to these time boundaries.' }
+  ],
+  mockup: renderBrowser('timetable-setup', 'Timetable Setup', 'Configure daily attendance schedules, period timings, and mode rules', `
+    <div>
+      <div style="display:flex;gap:12px;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:8px;margin-bottom:-2px">
+          1. Organisation Default (Morning & Evening)
+        </div>
+        <div style="font-size:12px;font-weight:600;color:#64748b;padding-bottom:8px">
+          2. Class-Specific Period Timetable
+        </div>
+      </div>
+
+      <div class="card" style="padding:18px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Standard Attendance Mode: Morning & Evening (AM / PM)</div>
+        <div style="font-size:10px;color:#64748b;margin-bottom:16px">Default times applied organization-wide for classes operating without period timetables.</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="border:1.5px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="font-weight:700;font-size:12px;color:#0f172a">🌅 Morning Session (AM)</span>
+              <span class="badge badge-success">Active Slot</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label class="form-label">CHECK-IN START</label>
+                <div class="form-input">09:00 AM</div>
+              </div>
+              <div>
+                <label class="form-label">CHECK-IN END</label>
+                <div class="form-input">09:30 AM</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border:1.5px solid #cbd5e1;border-radius:10px;padding:14px;background:#f8fafc">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="font-weight:700;font-size:12px;color:#0f172a">🌇 Evening Session (PM)</span>
+              <span class="badge badge-success">Active Slot</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label class="form-label">CHECK-OUT START</label>
+                <div class="form-input">03:30 PM</div>
+              </div>
+              <div>
+                <label class="form-label">CHECK-OUT END</label>
+                <div class="form-input">04:00 PM</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary">Save Default Session Timings</button>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 14: SCREEN 13 - TIMETABLE SETUP (PERIOD-WISE SCHEDULE)
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · TIMETABLE · SCREEN 13 OF 25',
+  title: '13. Timetable Setup — Class Period Schedule',
+  desc: 'Configure subject-specific periods, assign teaching faculty, and set exact period hours for secondary and college classes.',
+  pageNumber: 14,
+  steps: [
+    { title: 'Select class & section', desc: 'Choose Campus Branch, Class 10, and Section A from the cascading selector bar.' },
+    { title: 'Enable Period-Wise Mode', desc: 'Toggle the attendance mode switch to Period-Wise (Subject Timetable) for that specific class.' },
+    { title: 'Add subject period slots', desc: 'Add Period 1: Mathematics (Ananya Iyer), Period 2: Physics (Kiran Babu), Period 3: Chemistry.' },
+    { title: 'Instant device synchronization', desc: 'Saving changes automatically feeds today’s period timetable directly to teachers’ mobile tablets.' }
+  ],
+  mockup: renderBrowser('timetable-setup', 'Timetable Setup', 'Configure daily attendance schedules, period timings, and mode rules', `
+    <div>
+      <div style="display:flex;gap:12px;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:#64748b;padding-bottom:8px">
+          1. Organisation Default (Morning & Evening)
+        </div>
+        <div style="font-size:12px;font-weight:700;color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:8px;margin-bottom:-2px">
+          2. Class-Specific Period Timetable
+        </div>
+      </div>
+
+      <div class="toolbar" style="background:#f8fafc;padding:10px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:12px">
+        <div class="toolbar-left">
+          <span style="font-size:11px;font-weight:700;color:#0f172a">Class:</span>
+          <span class="badge badge-blue">Class 10 (Section A)</span>
+          <span style="font-size:11px;font-weight:700;color:#0f172a;margin-left:8px">Attendance Mode:</span>
+          <span class="badge badge-purple">PERIOD_WISE</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary btn-sm"><span style="margin-right:4px">${icons.plus}</span> Add Period Slot</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Slot #</th>
+              <th>Period Label</th>
+              <th>Subject Name</th>
+              <th>Assigned Teacher</th>
+              <th>Start Time</th>
+              <th>End Time</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1</strong></td>
+              <td>Period 1</td>
+              <td>Mathematics</td>
+              <td>Ananya Iyer</td>
+              <td>09:00 AM</td>
+              <td>09:45 AM</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>2</strong></td>
+              <td>Period 2</td>
+              <td>Physics</td>
+              <td>Kiran Babu</td>
+              <td>09:45 AM</td>
+              <td>10:30 AM</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>3</strong></td>
+              <td>Period 3</td>
+              <td>Chemistry</td>
+              <td>Suresh Rao</td>
+              <td>10:45 AM</td>
+              <td>11:30 AM</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 15: SCREEN 14 - ADD PERIOD SLOT MODAL
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · TIMETABLE · SCREEN 14 OF 25',
+  title: '14. Add Timetable Period Slot Modal',
+  desc: 'Clicking Add Period Slot opens the period definition form to assign subject curriculum, teacher, and schedule time.',
+  pageNumber: 15,
+  steps: [
+    { title: 'Launch period dialog', desc: 'Clicking + Add Period Slot opens the period modal dialog for Class 10 (A).' },
+    { title: 'Name slot and subject', desc: 'Type Period Name (e.g. Period 4) and Subject Name (e.g. English Literature).' },
+    { title: 'Assign faculty in charge', desc: 'Select the assigned faculty member from the faculty directory dropdown.' },
+    { title: 'Automatic time increment', desc: 'The modal pre-fills start time based on the previous period’s end time with validation checks.' }
+  ],
+  mockup: renderBrowser('timetable-setup', 'Timetable Setup', 'Configure daily attendance schedules, period timings, and mode rules', `
+    <div class="modal-backdrop">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">Add Timetable Period · Class 10 (A)</div>
+          <span style="font-size:16px;color:#94a3b8;cursor:pointer">✕</span>
+        </div>
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label class="form-label">SLOT / PERIOD NAME *</label>
+              <div class="form-input">Period 4</div>
+            </div>
+            <div>
+              <label class="form-label">SUBJECT NAME *</label>
+              <div class="form-input">English Literature</div>
+            </div>
+            <div>
+              <label class="form-label">START TIME *</label>
+              <div class="form-input">11:30 AM</div>
+            </div>
+            <div>
+              <label class="form-label">END TIME *</label>
+              <div class="form-input">12:15 PM</div>
+            </div>
+            <div style="grid-column:span 2">
+              <label class="form-label">ASSIGNED FACULTY MEMBER *</label>
+              <div class="form-input">Ananya Iyer (Senior Teacher)</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm">Cancel</button>
+          <button class="btn btn-primary btn-sm">Save Period Slot &rarr;</button>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 16: SCREEN 15 - STUDENT ATTENDANCE REGISTER
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · ATTENDANCE · SCREEN 15 OF 25',
+  title: '15. Student Daily Attendance Register',
+  desc: 'Review biometric tablet punches, perform manual status overrides, bulk mark entire classes, and export certified records.',
+  pageNumber: 16,
+  steps: [
+    { title: 'Select register parameters', desc: 'Filter by Date (e.g. today), Campus Branch, Class 10 (A), and Period/Session.' },
+    { title: 'Inspect biometric capture mode', desc: 'Each record shows capture mode (device vs manual), check-in timestamp, and notes.' },
+    { title: 'Multi-status color overrides', desc: 'Change individual student statuses with a single click: Present (green), Absent (red), Late (amber).' },
+    { title: 'One-click bulk mark & save', desc: 'Use Mark All Present to rapidly fill attendance registers, then click Save to commit changes.' }
+  ],
+  mockup: renderBrowser('attendance/students', 'Student Attendance', 'Mark, review, and override daily student attendance registers', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="date" class="input-select" value="2026-11-05">
+          <select class="input-select"><option>Class 10 (Section A)</option></select>
+          <select class="input-select"><option>Period 1: Mathematics</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-success btn-sm"><span style="margin-right:4px">${icons.check}</span> Mark All Present</button>
+          <button class="btn btn-secondary btn-sm"><span style="margin-right:4px">${icons.download}</span> Export CSV</button>
+          <button class="btn btn-primary btn-sm">Save Register</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Roll</th>
+              <th>Student Name</th>
+              <th>Attendance Status</th>
+              <th>Check-In</th>
+              <th>Check-Out</th>
+              <th>Mode</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>101</strong></td>
+              <td>Aarav Singh</td>
+              <td><span class="badge badge-success">PRESENT</span></td>
+              <td>09:12 AM</td>
+              <td>-</td>
+              <td><span class="badge badge-purple">Face Device</span></td>
+              <td>Verified on time</td>
+            </tr>
+            <tr>
+              <td><strong>102</strong></td>
+              <td>Diya Patel</td>
+              <td><span class="badge badge-success">PRESENT</span></td>
+              <td>09:14 AM</td>
+              <td>-</td>
+              <td><span class="badge badge-purple">Face Device</span></td>
+              <td>Verified on time</td>
+            </tr>
+            <tr>
+              <td><strong>103</strong></td>
+              <td>Arjun Reddy</td>
+              <td><span class="badge badge-danger">ABSENT</span></td>
+              <td>-</td>
+              <td>-</td>
+              <td><span class="badge badge-gray">Manual</span></td>
+              <td>Leave applied</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 17: SCREEN 16 - SAVE CONFIRMATION & OVERRIDE
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · ATTENDANCE · SCREEN 16 OF 25',
+  title: '16. Attendance Status Override & Save Toast',
+  desc: 'Administrators can override automated punches, adjust timestamps, and commit updates with immediate visual feedback.',
+  pageNumber: 17,
+  steps: [
+    { title: 'Interactive status selectors', desc: 'Buttons for Present (P), Absent (A), Late (L), Half-Day (H), and Excused (E) allow one-click edits.' },
+    { title: 'Adjust timestamps', desc: 'Directly modify Check-In and Check-Out times in case a student arrived late due to medical transit.' },
+    { title: 'Add administrative remarks', desc: 'Enter remarks such as "Parent approved late arrival" to maintain complete audit history.' },
+    { title: 'Instant confirmation toast', desc: 'Clicking Save Attendance triggers the green alert notification indicating successful cloud database write.' }
+  ],
+  mockup: renderBrowser('attendance/students', 'Student Attendance', 'Mark, review, and override daily student attendance registers', `
+    <div>
+      <div class="alert alert-success" style="margin-bottom:12px">
+        <span style="font-weight:700">✓ Success:</span> Attendance register for Class 10 (A) saved successfully! 33 Present, 1 Absent, 1 Late.
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="date" class="input-select" value="2026-11-05">
+          <select class="input-select"><option>Class 10 (Section A)</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-secondary btn-sm"><span style="margin-right:4px">${icons.download}</span> Export CSV</button>
+          <button class="btn btn-primary btn-sm">Save Register</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Roll</th>
+              <th>Student Name</th>
+              <th>Status Quick Action</th>
+              <th>Check-In Time</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>101</strong></td>
+              <td>Aarav Singh</td>
+              <td>
+                <span class="status-btn active-p">P</span>
+                <span class="status-btn">A</span>
+                <span class="status-btn">L</span>
+              </td>
+              <td>09:12 AM</td>
+              <td><span style="color:#64748b;font-size:10px">Face scan verified</span></td>
+            </tr>
+            <tr>
+              <td><strong>103</strong></td>
+              <td>Arjun Reddy</td>
+              <td>
+                <span class="status-btn">P</span>
+                <span class="status-btn active-a">A</span>
+                <span class="status-btn">L</span>
+              </td>
+              <td>-</td>
+              <td><span style="color:#ef4444;font-size:10px">Medical Leave Approved</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 18: SCREEN 17 - STAFF ATTENDANCE & SHIFTS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · ATTENDANCE · SCREEN 17 OF 25',
+  title: '17. Staff Attendance & Shift Tracking',
+  desc: 'Monitor daily faculty check-in/out times, calculate shift working hours, and verify staff punctuality.',
+  pageNumber: 18,
+  steps: [
+    { title: 'Open Staff Attendance register', desc: 'Select Staff Attendance under the Attendance navigation grouping.' },
+    { title: 'Review check-in/out timestamps', desc: 'Records display daily punch times, assigned shift hours, and computed working duration.' },
+    { title: 'Status tracking', desc: 'Monitors whether faculty members are Present, Late, on Half-Day, or Absent.' },
+    { title: 'Download payroll attendance audit', desc: 'Export full faculty attendance sheets for monthly payroll calculation and audit reporting.' }
+  ],
+  mockup: renderBrowser('attendance/staff', 'Staff Attendance', 'Monitor faculty check-ins, punctuality, and daily working hours', `
+    <div>
+      <div class="toolbar" style="gap:6px">
+        <div class="toolbar-left" style="gap:6px">
+          <input type="date" class="input-select" value="2026-11-05" style="width:105px">
+          <select class="input-select" style="width:100px"><option>Main Campus</option></select>
+          <select class="input-select" style="width:85px"><option>All Roles</option></select>
+          <select class="input-select" style="width:90px"><option>All Statuses</option></select>
+        </div>
+        <div class="toolbar-right" style="gap:5px">
+          <button class="btn btn-success btn-sm">✓ All Present</button>
+          <button class="btn btn-sm" style="background:#ef4444;color:#fff">✗ All Absent</button>
+          <button class="btn btn-secondary btn-sm">Clear All</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Staff ID</th>
+              <th>Faculty Name</th>
+              <th>Designation</th>
+              <th>Check-In</th>
+              <th>Check-Out</th>
+              <th>Duration</th>
+              <th>Shift Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>STF001</strong></td>
+              <td>Ananya Iyer</td>
+              <td>Senior Teacher (Mathematics)</td>
+              <td>08:45 AM</td>
+              <td>04:15 PM</td>
+              <td><strong>7h 30m</strong></td>
+              <td><span class="badge badge-success">Present (Full Day)</span></td>
+              <td><span class="action-btn">Edit</span></td>
+            </tr>
+            <tr>
+              <td><strong>STF002</strong></td>
+              <td>Kiran Babu</td>
+              <td>Teacher (Science)</td>
+              <td>08:52 AM</td>
+              <td>04:00 PM</td>
+              <td><strong>7h 08m</strong></td>
+              <td><span class="badge badge-success">Present (Full Day)</span></td>
+              <td><span class="action-btn">Edit</span></td>
+            </tr>
+            <tr>
+              <td><strong>STF003</strong></td>
+              <td>Meena Kumari</td>
+              <td>Office Administrator</td>
+              <td>09:15 AM</td>
+              <td>04:30 PM</td>
+              <td><strong>7h 15m</strong></td>
+              <td><span class="badge badge-warning">Late In (15m)</span></td>
+              <td><span class="action-btn">Edit</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 19: SCREEN 18 - ACADEMIC DATA DEEP INTELLIGENCE
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · ACADEMIC DATA · SCREEN 18 OF 25',
+  title: '18. Academic Data Deep Intelligence',
+  desc: 'Query historical student and staff datasets across multiple academic years with cascading multi-dimensional filters.',
+  pageNumber: 19,
+  steps: [
+    { title: 'Toggle Student vs Staff database', desc: 'Instantly switch between student rosters and faculty personnel directories.' },
+    { title: 'Dynamic Academic Year selector', desc: 'Select historical academic sessions (e.g. 2024-2025, 2025-2026) populated directly from database archives.' },
+    { title: 'Cascading filters', desc: 'Selecting an Academic Year filters valid classes, which cascades to available class sections.' },
+    { title: 'Customized CSV export modal', desc: 'Click Export to launch the date-ranged export dialog to extract certified records for board audits.' }
+  ],
+  mockup: renderBrowser('academic-data', 'Academic Data', 'Cross-sectional query engine and multi-year institutional reporting', `
+    <div>
+      <div class="card" style="padding:14px;margin-bottom:12px;background:#f8fafc">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;background:#e2e8f0;border-radius:6px;padding:2px">
+            <span style="background:#4f46e5;color:#fff;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700">Students Database</span>
+            <span style="color:#475569;padding:4px 10px;font-size:10px;font-weight:600">Staff Database</span>
+          </div>
+          <select class="input-select" style="font-weight:700"><option>Academic Year: 2024-2025</option></select>
+          <select class="input-select"><option>Class 10</option></select>
+          <select class="input-select"><option>Section A</option></select>
+          <select class="input-select"><option>All Genders</option></select>
+          <button class="btn btn-primary btn-sm" style="margin-left:auto">Run Query</button>
+          <button class="btn btn-secondary btn-sm"><span style="margin-right:4px">${icons.download}</span> Export CSV</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Adm No</th>
+              <th>Roll</th>
+              <th>Student Name</th>
+              <th>Gender</th>
+              <th>Class & Sec</th>
+              <th>Parent Mobile</th>
+              <th>Attendance Rate</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>ADM2024001</strong></td>
+              <td>101</td>
+              <td>Aarav Singh</td>
+              <td>Male</td>
+              <td>Class 10 (A)</td>
+              <td>+91-9876543230</td>
+              <td><strong>96.8%</strong></td>
+              <td><span class="badge badge-success">Enrolled</span></td>
+            </tr>
+            <tr>
+              <td><strong>ADM2024002</strong></td>
+              <td>102</td>
+              <td>Diya Patel</td>
+              <td>Female</td>
+              <td>Class 10 (A)</td>
+              <td>+91-9876543231</td>
+              <td><strong>98.1%</strong></td>
+              <td><span class="badge badge-success">Enrolled</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 20: SCREEN 19 - STAFF LEAVE MANAGEMENT
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · LEAVES · SCREEN 19 OF 25',
+  title: '19. Staff Leave Management & Approvals',
+  desc: 'Configure leave categories (Casual, Medical, Earned, Maternity) and review faculty leave applications with administrative remarks.',
+  pageNumber: 20,
+  steps: [
+    { title: 'Leave quota configuration', desc: 'Set institutional maximum days per year for Casual (12), Medical (15), and Earned (20) leaves.' },
+    { title: 'Review pending requests', desc: 'Counters summarize Total Applications, Pending, Approved, and Rejected requests.' },
+    { title: 'Interactive review modal', desc: 'Clicking Review opens the application details showing faculty name, dates, remaining balance, and reason.' },
+    { title: 'Approve or Reject with remarks', desc: 'Administrators enter notes and approve or reject. The decision syncs instantly to staff portal accounts.' }
+  ],
+  mockup: renderBrowser('leaves', 'Leave Management', 'Process staff leave requests and track annual quota entitlements', `
+    <div>
+      <div class="stats-grid" style="margin-bottom:14px">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#eff6ff;color:#3b82f6">${icons.leaves}</div>
+          <div class="stat-info"><div class="stat-value">8</div><div class="stat-label">Total Requests</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fefce8;color:#d97706">${icons.leaves}</div>
+          <div class="stat-info"><div class="stat-value" style="color:#d97706">2</div><div class="stat-label">Pending Review</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0fdf4;color:#10b981">${icons.check}</div>
+          <div class="stat-info"><div class="stat-value" style="color:#10b981">5</div><div class="stat-label">Approved</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fee2e2;color:#dc2626">✕</div>
+          <div class="stat-info"><div class="stat-value" style="color:#dc2626">1</div><div class="stat-label">Rejected</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Staff Name</th>
+              <th>Category</th>
+              <th>From Date</th>
+              <th>To Date</th>
+              <th>Days</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Kiran Babu</strong></td>
+              <td>Medical Leave</td>
+              <td>2026-11-10</td>
+              <td>2026-11-12</td>
+              <td>3 Days</td>
+              <td>Seasonal fever recovery</td>
+              <td><span class="badge badge-warning">Pending Review</span></td>
+              <td><span class="action-btn">Review & Act</span></td>
+            </tr>
+            <tr>
+              <td><strong>Meena Kumari</strong></td>
+              <td>Casual Leave</td>
+              <td>2026-10-24</td>
+              <td>2026-10-24</td>
+              <td>1 Day</td>
+              <td>Family emergency</td>
+              <td><span class="badge badge-success">Approved</span></td>
+              <td><span class="action-btn">View Note</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 21: SCREEN 20 - REVIEW LEAVE APPLICATION MODAL
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · LEAVES · SCREEN 20 OF 25',
+  title: '20. Review Leave Application Modal',
+  desc: 'The review modal displays complete request history, remaining quota balance, and administrative decision controls.',
+  pageNumber: 21,
+  steps: [
+    { title: 'Open review dialog', desc: 'Clicking Review & Act launches the modal dialog over the dimmed leave management register.' },
+    { title: 'Inspect remaining quota', desc: 'Displays used days vs maximum annual allowance (e.g. Medical Leave: 2 used of 15 days).' },
+    { title: 'Add administrative remarks', desc: 'Input optional supervisor notes explaining the reason for granting or refusing the request.' },
+    { title: 'Approve or Reject', desc: 'One-click buttons immediately finalize the leave status and notify the staff member.' }
+  ],
+  mockup: renderBrowser('leaves', 'Leave Management', 'Process staff leave requests and track annual quota entitlements', `
+    <div class="modal-backdrop">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title">Review Leave Application · Kiran Babu</div>
+          <span style="font-size:16px;color:#94a3b8;cursor:pointer">✕</span>
+        </div>
+        <div class="modal-body">
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:10px;color:#64748b">LEAVE TYPE:</span>
+              <span class="badge badge-purple">Medical Leave (15 Days Annual Quota)</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:10px;color:#64748b">DURATION:</span>
+              <span style="font-weight:700;font-size:11px">2026-11-10 to 2026-11-12 (3 Days)</span>
+            </div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:2px">STATED REASON:</div>
+            <div style="font-size:11px;color:#0f172a;background:#fff;padding:8px;border-radius:6px;border:1px solid #cbd5e1">
+              "Undergoing viral fever treatment under medical supervision. Doctor certificate attached."
+            </div>
+          </div>
+          <label class="form-label">ADMINISTRATIVE REVIEW REMARKS</label>
+          <div class="form-input" style="height:48px">Approved. Please submit medical fitness certificate upon return.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" style="color:#ef4444;border-color:#ef4444">Reject Application</button>
+          <button class="btn btn-success btn-sm">✓ Approve Leave Application</button>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 22: SCREEN 21 - ACADEMIC CALENDAR & HOLIDAYS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · HOLIDAYS · SCREEN 21 OF 25',
+  title: '21. Academic Calendar & Holidays',
+  desc: 'Maintain official school holidays, festive vacations, and term breaks so attendance calculations prevent false absences.',
+  pageNumber: 22,
+  steps: [
+    { title: 'Open Holidays schedule', desc: 'Displays national, regional festival, and school-specific holiday entries.' },
+    { title: 'Add a scheduled holiday', desc: 'Input Holiday Name, Date (or date range), Holiday Category, and Description.' },
+    { title: 'Category tagging', desc: 'Categorize events as National (Independence Day), Festival (Diwali), or School Special (Annual Day).' },
+    { title: 'Automated attendance logic', desc: 'Attendance engines automatically reference this calendar to exclude non-working days from absence reports.' }
+  ],
+  mockup: renderBrowser('holidays', 'Holidays', 'Manage official institutional holidays and academic calendar events', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box"><span class="search-icon">${icons.search}</span><input placeholder="Search holidays..."></div>
+          <select class="input-select"><option>Academic Session 2026-2027</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Add Holiday</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Holiday Name</th>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>2026-08-15</strong></td>
+              <td>Independence Day</td>
+              <td><span class="badge badge-purple">National Holiday</span></td>
+              <td>Flag hoisting & national holiday celebration</td>
+              <td><span class="badge badge-success">Official</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>2026-10-02</strong></td>
+              <td>Gandhi Jayanti</td>
+              <td><span class="badge badge-purple">National Holiday</span></td>
+              <td>Gazetted national holiday</td>
+              <td><span class="badge badge-success">Official</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+            <tr>
+              <td><strong>2026-11-01</strong></td>
+              <td>Diwali Festive Vacation</td>
+              <td><span class="badge badge-warning">Festival Break</span></td>
+              <td>Festival of Lights holiday</td>
+              <td><span class="badge badge-success">Official</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn danger">Delete</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 23: SCREEN 22 - NOTICE BOARD & BULLETINS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · NOTICES · SCREEN 22 OF 25',
+  title: '22. Notice Board & Bulletins',
+  desc: 'Publish institutional circulars, announcements, and bulletins targeted to entire schools, staff only, or students.',
+  pageNumber: 23,
+  steps: [
+    { title: 'Open Notice Board', desc: 'Select Notices in the Management section to review all published circulars.' },
+    { title: 'Target audience selection', desc: 'Broadcast notices specifically to All School, Faculty & Staff Only, or Students & Parents.' },
+    { title: 'Rich bulletin publisher', desc: 'Specify Notice Title, Circular Body, Priority Level, and publish date.' },
+    { title: 'Instant dashboard distribution', desc: 'Published circulars display on user dashboards and companion mobile apps immediately.' }
+  ],
+  mockup: renderBrowser('notices', 'Notices', 'Broadcast institutional circulars, announcements, and academic alerts', `
+    <div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="search-box"><span class="search-icon">${icons.search}</span><input placeholder="Search notices..."></div>
+          <select class="input-select"><option>All Audiences</option></select>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary"><span style="margin-right:4px">${icons.plus}</span> Publish Notice</button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="card" style="padding:14px;border-left:4px solid #3b82f6">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-weight:800;font-size:12px;color:#0f172a">Welcome to the New Academic Session 2026</span>
+            <span class="badge badge-blue">Audience: All</span>
+          </div>
+          <div style="font-size:10.5px;color:#475569;line-height:1.4">Welcome to the Venkat Training School management system. All faculty and students are requested to ensure biometric face registration is completed.</div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:8px">
+            <span>Published by: Venkat Kumar (Admin)</span>
+            <span>2 days ago</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px;border-left:4px solid #10b981">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-weight:800;font-size:12px;color:#0f172a">Quarterly Curriculum Review Meeting</span>
+            <span class="badge badge-purple">Audience: Staff Only</span>
+          </div>
+          <div style="font-size:10.5px;color:#475569;line-height:1.4">Quarterly curriculum review meeting in Main Campus Auditorium on Friday at 04:30 PM. All department heads are requested to attend.</div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:8px">
+            <span>Published by: Venkat Kumar (Admin)</span>
+            <span>Today at 10:15 AM</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 24: SCREEN 23 - ORGANISATION SETTINGS
+// -------------------------------------------------------------
+pages.push({
+  category: 'WEB PORTAL · SETTINGS · SCREEN 23 OF 25',
+  title: '23. Organisation Settings & Branding',
+  desc: 'Configure school profile details, upload institutional crest/logo, set official domain, and review attendance policy modes.',
+  pageNumber: 24,
+  steps: [
+    { title: 'Open Organisation Settings', desc: 'Click Settings in the left sidebar to manage school profile parameters.' },
+    { title: 'School branding & crest', desc: 'Upload the official school emblem and configure official institutional display names.' },
+    { title: 'Contact & domain binding', desc: 'Specify official school address, support phone number, administrative email, and custom subdomain.' },
+    { title: 'Feature policy review', desc: 'Displays active Timetable Access status and allowed attendance modes governed by SuperAdmin.' }
+  ],
+  mockup: renderBrowser('settings', 'Settings', 'Configure institutional parameters, branding, and policy permissions', `
+    <div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:14px">Institutional Profile & Contact Details</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label class="form-label">INSTITUTION NAME</label>
+            <div class="form-input">Venkat Training School</div>
+          </div>
+          <div>
+            <label class="form-label">ORGANISATION CODE</label>
+            <div class="form-input">vts</div>
+          </div>
+          <div>
+            <label class="form-label">OFFICIAL EMAIL</label>
+            <div class="form-input">admin@vts.edu.in</div>
+          </div>
+          <div>
+            <label class="form-label">CONTACT PHONE</label>
+            <div class="form-input">+91-9876543210</div>
+          </div>
+        </div>
+
+        <div style="background:#ede9fe40;border:1px solid #ede9fe;border-radius:8px;padding:12px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:#6d28d9;margin-bottom:4px">SuperAdmin Feature Governance</div>
+          <div style="font-size:10px;color:#475569">
+            Timetable Setup Access: <strong>Enabled (Active)</strong> · Allowed Attendance Policy: <strong>BOTH (Morning/Evening & Period-Wise)</strong>
+          </div>
+        </div>
+
+        <button class="btn btn-primary">Save Settings Changes</button>
+      </div>
+    </div>
+  `)
+});
+
+// -------------------------------------------------------------
+// PAGE 25: SCREEN 24 - SUPERADMIN PORTAL SIGN-IN
+// -------------------------------------------------------------
+pages.push({
+  category: 'SUPERADMIN · AUTHENTICATION · SCREEN 24 OF 25',
+  title: '24. SuperAdmin Portal Sign-In',
+  desc: 'The master SaaS administration portal allows system operators to govern all educational tenant institutions.',
+  pageNumber: 25,
+  steps: [
+    { title: 'Access SuperAdmin portal', desc: 'Open /super-admin/login in your browser to reach the SaaS platform gateway.' },
+    { title: 'Enter root master credentials', desc: 'Input superadmin credentials protected with high-cost Bcrypt encryption.' },
+    { title: 'Separate security domain', desc: 'SuperAdmin tokens (superToken) operate in a distinct authentication namespace from tenant accounts.' },
+    { title: 'Launch multi-tenant console', desc: 'On successful sign-in, the system loads the Global SaaS Tenant Governance console.' }
+  ],
+  mockup: renderBrowser('', 'SuperAdmin Master Gateway', 'Global multi-tenant platform administration', `
+    <div style="display:flex;height:100%;align-items:center;justify-content:center;background:#0f172a;padding:30px 0;">
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:16px;width:380px;padding:28px 24px;box-shadow:0 15px 35px rgba(0,0,0,0.4)">
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="width:48px;height:48px;background:#0284c720;color:#38bdf8;border-radius:12px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center">
+            <span style="width:26px;height:26px">${icons.admins}</span>
+          </div>
+          <div style="font-size:17px;font-weight:800;color:#f8fafc">SuperAdmin Portal</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px">Multi-Tenant Educational Cloud Governor</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase">Master Username</label>
+          <div style="border:1px solid #475569;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:4px;color:#f8fafc;background:#0f172a">superadmin</div>
+        </div>
+        <div style="margin-bottom:18px">
+          <label style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase">Master Key</label>
+          <div style="border:1px solid #475569;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:4px;color:#f8fafc;background:#0f172a">••••••••••••••••</div>
+        </div>
+        <button style="width:100%;background:#0284c7;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">
+          Unlock Master Dashboard &rarr;
+        </button>
+      </div>
+    </div>
+  `, { isSuperAdmin: true, url: 'https://admin.schoolmgmt.com/super-admin/login' })
+});
+
+// -------------------------------------------------------------
+// PAGE 26: SCREEN 25 - SUPERADMIN DASHBOARD & GOVERNANCE
+// -------------------------------------------------------------
+pages.push({
+  category: 'SUPERADMIN · GOVERNANCE · SCREEN 25 OF 25',
+  title: '25. SuperAdmin Tenant Governance',
+  desc: 'Onboard new schools, provision tenant admin credentials, toggle Timetable Access, and govern allowed attendance modes.',
+  pageNumber: 26,
+  steps: [
+    { title: 'Provision new institutions', desc: 'Click Create Organisation to onboard a new school with custom subdomain, address, and head admin.' },
+    { title: 'Toggle Timetable Setup access', desc: 'Enable or disable Timetable Setup per institution. When disabled, the navigation link is automatically hidden.' },
+    { title: 'Enforce attendance mode rules', desc: 'Restrict tenant schools to Morning & Evening only, Period-Wise only, or grant BOTH modes.' },
+    { title: 'Monitor tenant quotas', desc: 'Track live stats across institutions: total enrolled students, faculty count, and cloud usage metrics.' }
+  ],
+  mockup: renderBrowser('dashboard', 'SuperAdmin Dashboard', 'Global governance of tenant organisations, quotas, and feature flags', `
+    <div>
+      <div class="stats-grid" style="margin-bottom:14px">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#eff6ff;color:#0284c7">${icons.school}</div>
+          <div class="stat-info"><div class="stat-value">12</div><div class="stat-label">Total Schools</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0fdf4;color:#10b981">${icons.branches}</div>
+          <div class="stat-info"><div class="stat-value">34</div><div class="stat-label">Campuses</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fefce8;color:#eab308">${icons.students}</div>
+          <div class="stat-info"><div class="stat-value">4,280</div><div class="stat-label">Active Students</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fdf4ff;color:#a855f7">${icons.studentAtt}</div>
+          <div class="stat-info"><div class="stat-value" style="color:#0284c7">86,410</div><div class="stat-label">Device Punches</div></div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span style="font-size:11px;font-weight:700;color:#0f172a">Registered Institutions</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary" style="background:#0284c7"><span style="margin-right:4px">${icons.plus}</span> Provision New School</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Organisation Name</th>
+              <th>Domain</th>
+              <th>Timetable Access</th>
+              <th>Allowed Mode</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>vts</strong></td>
+              <td>Venkat Training School</td>
+              <td>vts.schoolmgmt.com</td>
+              <td><span class="badge badge-success">Enabled (ON)</span></td>
+              <td><span class="badge badge-purple">BOTH Modes</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Admins</span></td>
+            </tr>
+            <tr>
+              <td><strong>aps</strong></td>
+              <td>Apex Public School</td>
+              <td>apex.schoolmgmt.com</td>
+              <td><span class="badge badge-success">Enabled (ON)</span></td>
+              <td><span class="badge badge-blue">PERIOD_WISE</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Admins</span></td>
+            </tr>
+            <tr>
+              <td><strong>gvs</strong></td>
+              <td>Green Valley High</td>
+              <td>greenvalley.edu</td>
+              <td><span class="badge badge-warning">Disabled (OFF)</span></td>
+              <td><span class="badge badge-blue">MORNING_EVENING</span></td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><span class="action-btn">Edit</span> <span class="action-btn">Admins</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `, { isSuperAdmin: true, url: 'https://admin.schoolmgmt.com/super-admin/dashboard' })
+});
+
+// =========================================================================
+// ASSEMBLE FULL HTML DOCUMENT WITH EXACT PDF STYLES
+// =========================================================================
+
+const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ACS School Management - Application Walkthrough</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+    background: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    page-break-after: always;
+    page-break-inside: avoid;
+    box-sizing: border-box;
+    padding: 14mm 16mm 12mm 16mm;
+    position: relative;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Cover Page Styling */
+  .cover-top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 10mm;
+    background: #4338ca;
+  }
+  .cover-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 20px;
+  }
+  .cover-app-icon {
+    width: 130px;
+    height: 130px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border-radius: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 20px 40px rgba(79, 70, 229, 0.25);
+    margin-bottom: 32px;
+  }
+  .cover-app-icon .icon-inner {
+    width: 72px;
+    height: 72px;
+    color: #ffffff;
+  }
+  .cover-title {
+    font-size: 36px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.5px;
+    margin: 0 0 10px 0;
+  }
+  .cover-subtitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #4338ca;
+    margin: 0 0 14px 0;
+  }
+  .cover-tagline {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+  }
+  .cover-bottom {
+    text-align: center;
+    padding-bottom: 18mm;
+  }
+  .cover-badge {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+  }
+
+  /* Standard Page Header */
+  .page-header {
+    margin-bottom: 10px;
+  }
+  .category-tag {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #4338ca;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .screen-title {
+    font-size: 19px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 3px 0;
+    letter-spacing: -0.3px;
+  }
+  .screen-desc {
+    font-size: 11.5px;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.35;
+  }
+
+  /* Browser Window Mockup */
+  .web-browser-frame {
+    width: 100%;
+    height: 440px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px -3px rgba(0,0,0,0.08);
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .browser-topbar {
+    height: 26px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    flex-shrink: 0;
+  }
+  .traffic-dots {
+    display: flex;
+    gap: 4px;
+  }
+  .traffic-dots .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .traffic-dots .dot.red { background: #ef4444; }
+  .traffic-dots .dot.yellow { background: #f59e0b; }
+  .traffic-dots .dot.green { background: #10b981; }
+  .url-pill {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 2px 14px;
+    font-size: 9px;
+    color: #475569;
+    display: flex;
+    align-items: center;
+  }
+  .lock-icon {
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+  }
+  .lock-icon svg { width: 100%; height: 100%; }
+
+  .browser-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Exact Frontend Sidebar */
+  .browser-sidebar {
+    width: 180px;
+    background: #0f172a;
+    color: #94a3b8;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    border-right: 1px solid #1e293b;
+  }
+  .super-sidebar {
+    background: #090d16;
+  }
+  .sidebar-logo {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .sidebar-logo-icon {
+    width: 26px;
+    height: 26px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .sidebar-logo-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  .super-icon {
+    background: linear-gradient(135deg, #0284c7, #38bdf8);
+  }
+  .sidebar-logo-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sidebar-logo-sub {
+    font-size: 7.5px;
+    color: #94a3b8;
+  }
+  .sidebar-nav {
+    flex: 1;
+    overflow: hidden;
+    padding: 4px 0;
+  }
+  .sidebar-section-title {
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(148,163,184,0.45);
+    padding: 6px 12px 2px;
+  }
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3.5px 12px;
+    color: #94a3b8;
+    font-size: 8.5px;
+    font-weight: 500;
+    position: relative;
+  }
+  .sidebar-link.active {
+    background: rgba(99,102,241,0.15);
+    color: #818cf8;
+    font-weight: 700;
+  }
+  .sidebar-link.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #6366f1;
+    border-radius: 0 2px 2px 0;
+  }
+  .sidebar-link-icon {
+    width: 11px;
+    height: 11px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .sidebar-link-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .sidebar-footer {
+    padding: 6px 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-avatar {
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 8.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sidebar-user-name {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.1;
+  }
+  .sidebar-user-role {
+    font-size: 7.5px;
+    color: #94a3b8;
+  }
+
+  /* Main Viewport & Header */
+  .main-viewport {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #f1f5f9;
+  }
+  .header {
+    height: 38px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
+  .page-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+  }
+  .page-subtitle {
+    font-size: 8px;
+    color: #64748b;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .branch-select-pill {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 9px;
+    color: #0f172a;
+  }
+  .header-bell {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+  }
+  .header-bell svg { width: 13px; height: 13px; }
+  .bell-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 10px;
+    height: 10px;
+    background: #ef4444;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 7px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .super-badge {
+    background: #0284c7;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .page-content {
+    flex: 1;
+    padding: 12px 16px;
+    overflow: hidden;
+  }
+
+  /* Stat Cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .stat-card {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .stat-icon svg { width: 18px; height: 18px; }
+  .stat-value {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+  }
+  .stat-label {
+    font-size: 8px;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  /* Cards & Containers */
+  .card {
+    background: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .card-body {
+    padding: 12px;
+  }
+
+  /* Toolbars & Form Controls */
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .toolbar-left, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 3px 8px;
+    height: 26px;
+    width: 160px;
+  }
+  .search-icon {
+    width: 12px;
+    height: 12px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon svg { width: 100%; height: 100%; }
+  .search-box input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 9.5px;
+    color: #0f172a;
+    width: 100%;
+  }
+  .input-select {
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 9.5px;
+    background: #ffffff;
+    color: #0f172a;
+    height: 26px;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-size: 9.5px;
+    padding: 4.5px 10px;
+    height: 26px;
+    white-space: nowrap;
+  }
+  .btn svg { width: 11px; height: 11px; }
+  .btn-primary {
+    background: #6366f1;
+    color: #ffffff;
+  }
+  .btn-secondary {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+  }
+  .btn-success {
+    background: #10b981;
+    color: #ffffff;
+  }
+  .btn-sm {
+    height: 24px;
+    padding: 2px 8px;
+    font-size: 9px;
+  }
+
+  /* Tables */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5px;
+    background: #ffffff;
+  }
+  .data-table th {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 7.5px;
+    letter-spacing: 0.05em;
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .data-table td {
+    padding: 5.5px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+  }
+  .data-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1.5px 6px;
+    border-radius: 9999px;
+    font-size: 7.5px;
+    font-weight: 700;
+  }
+  .badge-success { background: #d1fae5; color: #065f46; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .badge-warning { background: #fef3c7; color: #92400e; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-purple { background: #ede9fe; color: #6b21a8; }
+  .badge-gray { background: #f1f5f9; color: #475569; }
+
+  .action-btn {
+    color: #4f46e5;
+    font-weight: 700;
+    cursor: pointer;
+    margin-right: 6px;
+  }
+  .action-btn.danger { color: #ef4444; }
+
+  /* Quick status buttons */
+  .status-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    font-size: 8px;
+    font-weight: 800;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #64748b;
+    margin-right: 3px;
+  }
+  .status-btn.active-p { background: #10b981; color: #fff; border-color: #10b981; }
+  .status-btn.active-a { background: #ef4444; color: #fff; border-color: #ef4444; }
+
+  /* Alert Banner */
+  .alert {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 9.5px;
+  }
+  .alert-success {
+    background: #d1fae5;
+    border: 1px solid #10b98140;
+    color: #065f46;
+  }
+
+  /* Modal Dialog Simulation */
+  .modal-backdrop {
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+  }
+  .modal-window {
+    background: #ffffff;
+    border-radius: 12px;
+    width: 440px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+  .modal-header {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+  .modal-body {
+    padding: 14px;
+    background: #ffffff;
+  }
+  .modal-footer {
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    padding: 8px 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .form-label {
+    font-size: 7.5px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .form-input {
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 9.5px;
+    color: #0f172a;
+    background: #ffffff;
+  }
+
+  /* Instruction Cards Stack */
+  .steps-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .instruction-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 7px 11px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .step-number {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #4f46e5;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .step-content {
+    font-size: 10.5px;
+    line-height: 1.35;
+    color: #334155;
+  }
+  .step-title {
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  /* Page Footer */
+  .page-footer {
+    position: absolute;
+    bottom: 8mm;
+    left: 16mm;
+    right: 16mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+    color: #94a3b8;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+${pages.map(p => {
+  if (p.isCover) {
+    return `<div class="page">${p.html}</div>`;
+  }
+
+  return `
+    <div class="page">
+      <div class="page-header">
+        <div class="category-tag">${p.category}</div>
+        <h2 class="screen-title">${p.title}</h2>
+        <p class="screen-desc">${p.desc}</p>
+      </div>
+
+      <div class="web-layout">
+        ${p.mockup}
+        ${renderCards(p.steps)}
+      </div>
+
+      <div class="page-footer">
+        <span>ACS School Management | Application Walkthrough</span>
+        <span>Page ${p.pageNumber}</span>
+      </div>
+    </div>
+  `;
+}).join('\n')}
+
+</body>
+</html>
+`;
+
+// Save the assembled HTML file
+const htmlPath = path.resolve(__dirname, 'ACS_School_Management_Demo_Walkthrough.html');
+fs.writeFileSync(htmlPath, fullHtml, 'utf-8');
+console.log(`Generated HTML document at: ${htmlPath}`);
+
+// Compile to PDF via Chrome headless
+const pdfPath = path.resolve(__dirname, 'ACS_School_Management_Demo_Walkthrough.pdf');
+const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const userDataDir = path.resolve(__dirname, 'chrome_pdf_profile');
+
+console.log('Spawning Chrome headless to render 26-page PDF...');
+
+const chromeArgs = [
+  '--headless=new',
+  '--no-sandbox',
+  '--disable-gpu',
+  `--user-data-dir=${userDataDir}`,
+  '--no-pdf-header-footer',
+  `--print-to-pdf=${pdfPath}`,
+  `file:///${htmlPath.replace(/\\/g, '/')}`
+];
+
+execFile(chromePath, chromeArgs, (err, stdout, stderr) => {
+  if (err) {
+    console.error('Error invoking Chrome headless:', err);
+    process.exit(1);
+  }
+
+  console.log(`Successfully compiled PDF! File size: ${fs.statSync(pdfPath).size} bytes`);
+  console.log(`Output PDF location: ${pdfPath}`);
+
+  // Clean up temporary chrome profile
+  try {
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  } catch (e) {}
+
+  process.exit(0);
+});

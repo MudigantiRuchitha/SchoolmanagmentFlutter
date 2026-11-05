@@ -27,8 +27,7 @@ async function login(req, res) {
       [teacher.id, token]
     );
 
-    // Automatically record check-in at exact login time (status 'late' if after school hours)
-    await recordStaffLoginAttendance(db, teacher);
+    // Login authentication only; attendance punches are handled by biometric / facial scanner
 
     const displayStaffId = (teacher.staff_id && String(teacher.staff_id).trim() !== '') ? teacher.staff_id : teacher.id;
     res.json({
@@ -233,8 +232,7 @@ async function deviceLogin(req, res) {
       [teacher.id, token]
     );
 
-    // Automatically record check-in at exact login time (status 'late' if after school hours)
-    await recordStaffLoginAttendance(db, teacher);
+    // Login authentication only; attendance punches are handled by biometric / facial scanner
 
     const payload = buildStaffPayload(teacher);
 
@@ -448,14 +446,12 @@ async function logout(req, res) {
       if (rows.length > 0) teacher = rows[0];
     }
 
-    if (teacher) {
-      await recordStaffLogoutAttendance(db, teacher);
-    }
+    // Logout complete
 
     res.json({
       Status: 1,
       success: true,
-      message: 'Logout successful and checkout recorded',
+      message: 'Logout successful',
       Exception: null
     });
   } catch (err) {

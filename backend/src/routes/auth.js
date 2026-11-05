@@ -49,8 +49,7 @@ router.post('/login', async (req, res) => {
       let staffId = null;
       if (staffMatch.rows.length > 0) {
         staffId = staffMatch.rows[0].id;
-        // Record exact login check-in for staff
-        await recordStaffLoginAttendance(pool, staffMatch.rows[0]);
+        // Staff matched, set staffId without punching attendance
       }
 
       // Generate JWT
@@ -98,8 +97,7 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ success: false, message: 'Invalid username or password.' });
       }
 
-      // Record exact login check-in for staff
-      await recordStaffLoginAttendance(pool, staffUser);
+      // Staff login authenticated
 
       const token = jwt.sign(
         {
@@ -218,11 +216,9 @@ router.post('/logout', authMiddleware, async (req, res) => {
       if (sRes.rows.length > 0) staffRow = sRes.rows[0];
     }
 
-    if (staffRow) {
-      await recordStaffLogoutAttendance(pool, staffRow);
-    }
+    // Staff logout complete
 
-    res.json({ success: true, message: 'Logged out successfully, checkout recorded.' });
+    res.json({ success: true, message: 'Logged out successfully.' });
   } catch (err) {
     console.error('Logout error:', err);
     res.json({ success: true, message: 'Logged out.' });

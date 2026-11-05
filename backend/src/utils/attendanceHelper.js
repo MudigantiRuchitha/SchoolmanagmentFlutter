@@ -23,19 +23,19 @@ function timeToMinutes(timeStr) {
 }
 
 /**
- * Checks whether check-in time is strictly after the expected school hour (arrival time).
+ * Checks whether check-in time is strictly after the expected school hour (arrival time) plus grace period (default 15 minutes).
  * Defaults expected check-in to 09:00:00.
  */
-function isAfterSchoolHour(checkInTime, expectedCheckIn) {
+function isAfterSchoolHour(checkInTime, expectedCheckIn, graceMinutes = 15) {
   if (!checkInTime) return false;
   const inMins = timeToMinutes(checkInTime);
   const expMins = timeToMinutes(expectedCheckIn || '09:00:00');
-  return inMins > expMins;
+  return inMins > (expMins + graceMinutes);
 }
 
 /**
  * Records staff check-in when staff logs in.
- * Status is set to 'late' if login time is after staff's expected school hours (expected_check_in).
+ * Status is set to 'late' if login time is after staff's expected login hours (expected_check_in) + 15 mins grace period.
  * First check-in of the day is preserved.
  */
 async function recordStaffLoginAttendance(dbOrPool, staff, punchTime, punchDate) {
@@ -44,7 +44,7 @@ async function recordStaffLoginAttendance(dbOrPool, staff, punchTime, punchDate)
   const dateStr = punchDate || now.dateStr;
   const timeStr = punchTime || now.timeStr;
   const expIn = staff.expected_check_in || '09:00:00';
-  const isLate = isAfterSchoolHour(timeStr, expIn);
+  const isLate = isAfterSchoolHour(timeStr, expIn, 15);
   const status = isLate ? 'late' : 'present';
   const note = isLate
     ? `Checked in late via login (${timeStr})`
@@ -67,7 +67,7 @@ async function recordStaffLoginAttendance(dbOrPool, staff, punchTime, punchDate)
          check_in = COALESCE(staff_attendance.check_in, EXCLUDED.check_in),
          shift_status = CASE
            WHEN staff_attendance.check_in IS NULL THEN EXCLUDED.shift_status
-           WHEN staff_attendance.check_in > COALESCE($7::TIME, '09:00:00'::TIME) THEN 'late'
+           WHEN staff_attendance.check_in > (COALESCE($7::TIME, '09:00:00'::TIME) + INTERVAL '15 minutes') THEN 'late'
            ELSE staff_attendance.shift_status
          END,
          mode = COALESCE(staff_attendance.mode, EXCLUDED.mode),
@@ -130,10 +130,81 @@ async function recordStaffLogoutAttendance(dbOrPool, staff, punchTime, punchDate
   }
 }
 
+/**
+ * Calculates staff attendance status based on check-in, check-out and expected school hours.
+ * 
+ * Rules:
+ * 1. If neither check_in nor check_out exists: status remains manualStatus || null.
+ * 2. If check_in is strictly after expectedCheckIn + graceMinutes (default 15m): it is late.
+ * 3. Total school hours = expectedCheckOut - expectedCheckIn (default 09:00 to 17:00 = 8 hrs = 480 mins).
+ *    Half-day threshold = total school hours / 2 (e.g. 240 mins = 4 hrs).
+ * 4. If check_in exists but NO check_out:
+ *    - if late: 'late'
+ *    - if on time: 'present'
+ * 5. If BOTH check_in and check_out exist:
+ *    duration = check_out - check_in
+ *    - If duration >= halfDayMins:
+ *        - if completed full day (duration >= totalSchoolMins - 30):
+ *            - if late: 'late'
+ *            - if on time: 'present'
+ *        - else (stayed at least half day, but less than full day):
+ *            - 'half-day'
+ *    - If duration < halfDayMins (e.g. stayed 1 minute between 3:44 and 3:45):
+ *        - MUST NOT show 'half-day'!
+ *        - if late: 'late'
+ *        - else: 'absent'
+ */
+function calculateStaffAttendanceStatus(checkIn, checkOut, expectedCheckIn = '09:00', expectedCheckOut = '17:00', manualStatus = null) {
+  if (!checkIn && !checkOut) {
+    return manualStatus || null;
+  }
+
+  const expInMins = timeToMinutes(expectedCheckIn || '09:00:00');
+  const expOutMins = timeToMinutes(expectedCheckOut || '17:00:00');
+  const totalSchoolMins = (expOutMins > expInMins) ? (expOutMins - expInMins) : 480;
+  const halfDayMins = Math.floor(totalSchoolMins / 2);
+
+  const inMins = timeToMinutes(checkIn);
+  const isLate = checkIn ? isAfterSchoolHour(checkIn, expectedCheckIn, 15) : false;
+
+  // Case 1: Only check_in recorded so far
+  if (checkIn && !checkOut) {
+    if (manualStatus && manualStatus !== 'present' && manualStatus !== 'late') {
+      return manualStatus;
+    }
+    return isLate ? 'late' : 'present';
+  }
+
+  // Case 2: Only check_out recorded (anomalous)
+  if (!checkIn && checkOut) {
+    return manualStatus || 'absent';
+  }
+
+  // Case 3: Both check_in and check_out recorded
+  const outMins = timeToMinutes(checkOut);
+  const durationMins = Math.max(0, outMins - inMins);
+
+  if (durationMins >= halfDayMins) {
+    // Stayed for at least half of the total school hours
+    if (durationMins >= (totalSchoolMins - 30)) {
+      return isLate ? 'late' : 'present';
+    }
+    return 'half-day';
+  } else {
+    // Stayed LESS than half of the total school hours (e.g. 1 min from 3:44 to 3:45)
+    // Must NOT show half-day!
+    if (isLate) {
+      return 'late';
+    }
+    return 'absent';
+  }
+}
+
 module.exports = {
   getNowDateTime,
   timeToMinutes,
   isAfterSchoolHour,
+  calculateStaffAttendanceStatus,
   recordStaffLoginAttendance,
   recordStaffLogoutAttendance
 };
