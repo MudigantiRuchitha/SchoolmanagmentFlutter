@@ -169,42 +169,42 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
             // SECTION 1: OVERVIEW
             _buildSectionHeader('OVERVIEW'),
-            _buildDrawerTile(Icons.dashboard_rounded, '1. Dashboard', () => _navigateFromDrawer(const DashboardScreen(), 0)),
+            _buildDrawerTile(Icons.dashboard_rounded, 'Dashboard', () => _navigateFromDrawer(const DashboardScreen(), 0)),
 
             // SECTION 2: ORGANISATION
             _buildSectionHeader('ORGANISATION'),
-            _buildDrawerTile(Icons.business_rounded, '2. Branches', () => _navigateFromDrawer(const BranchesScreen())),
-            _buildDrawerTile(Icons.workspaces_rounded, '3. Branch Groups', () => _navigateFromDrawer(const BranchGroupsScreen())),
-            _buildDrawerTile(Icons.admin_panel_settings_rounded, '4. Admin Users', () => _navigateFromDrawer(const AdminUsersScreen())),
-            _buildDrawerTile(Icons.settings_rounded, '5. Settings', () => _navigateFromDrawer(const SettingsScreen())),
+            _buildDrawerTile(Icons.business_rounded, 'Branches', () => _navigateFromDrawer(const BranchesScreen())),
+            _buildDrawerTile(Icons.workspaces_rounded, 'Branch Groups', () => _navigateFromDrawer(const BranchGroupsScreen())),
+            _buildDrawerTile(Icons.admin_panel_settings_rounded, 'Admin Users', () => _navigateFromDrawer(const AdminUsersScreen())),
+            _buildDrawerTile(Icons.settings_rounded, 'Settings', () => _navigateFromDrawer(const SettingsScreen())),
 
             // SECTION 3: ACADEMIC ADMINISTRATOR
             _buildSectionHeader('ACADEMIC ADMINISTRATOR'),
-            _buildDrawerTile(Icons.menu_book_rounded, '6. Academic Data', () => _navigateFromDrawer(const AcademicDataScreen())),
+            _buildDrawerTile(Icons.menu_book_rounded, 'Academic Data', () => _navigateFromDrawer(const AcademicDataScreen())),
 
             // SECTION 4: ACADEMIC
             _buildSectionHeader('ACADEMIC'),
-            _buildDrawerTile(Icons.category_rounded, '7. Academic Groups', () => _navigateFromDrawer(const AcademicGroupsScreen())),
-            _buildDrawerTile(Icons.meeting_room_rounded, '8. Classes & Sections', () => _navigateFromDrawer(const ClassesScreen())),
-            _buildDrawerTile(Icons.people_alt_rounded, '9. Students Directory', () => _navigateFromDrawer(const StudentsScreen(), 2)),
-            _buildDrawerTile(Icons.badge_rounded, '10. Staff Directory', () => _navigateFromDrawer(const StaffScreen(), 3)),
+            _buildDrawerTile(Icons.category_rounded, 'Academic Groups', () => _navigateFromDrawer(const AcademicGroupsScreen())),
+            _buildDrawerTile(Icons.meeting_room_rounded, 'Classes & Sections', () => _navigateFromDrawer(const ClassesScreen())),
+            _buildDrawerTile(Icons.people_alt_rounded, 'Students Directory', () => _navigateFromDrawer(const StudentsScreen(), 2)),
+            _buildDrawerTile(Icons.badge_rounded, 'Staff Directory', () => _navigateFromDrawer(const StaffScreen(), 3)),
 
             // SECTION 5: ATTENDANCE
             _buildSectionHeader('ATTENDANCE'),
-            _buildDrawerTile(Icons.schedule_rounded, '11. Timetable Setup', () => _navigateFromDrawer(const TimetableSetupScreen())),
-            _buildDrawerTile(Icons.how_to_reg_rounded, '12. Student Attendance', () => _navigateFromDrawer(const StudentAttendanceScreen(), 1)),
-            _buildDrawerTile(Icons.access_time_filled_rounded, '13. Staff Attendance', () => _navigateFromDrawer(const StaffAttendanceScreen())),
+            _buildDrawerTile(Icons.schedule_rounded, 'Timetable Setup', () => _navigateFromDrawer(const TimetableSetupScreen())),
+            _buildDrawerTile(Icons.how_to_reg_rounded, 'Student Attendance', () => _navigateFromDrawer(const StudentAttendanceScreen(), 1)),
+            _buildDrawerTile(Icons.access_time_filled_rounded, 'Staff Attendance', () => _navigateFromDrawer(const StaffAttendanceScreen())),
 
             // SECTION 6: MANAGEMENT
             _buildSectionHeader('MANAGEMENT'),
             _buildDrawerTile(
               Icons.beach_access_rounded,
-              '14. Leave Management',
+              'Leave Management',
               () => _navigateFromDrawer(const LeaveApprovalsScreen(), 4),
               badgeCount: leaves.pendingCount,
             ),
-            _buildDrawerTile(Icons.calendar_month_rounded, '15. Holidays Calendar', () => _navigateFromDrawer(const HolidaysScreen())),
-            _buildDrawerTile(Icons.campaign_rounded, '16. Notices & Circulars', () => _navigateFromDrawer(const NoticesScreen())),
+            _buildDrawerTile(Icons.calendar_month_rounded, 'Holidays Calendar', () => _navigateFromDrawer(const HolidaysScreen())),
+            _buildDrawerTile(Icons.campaign_rounded, 'Notices & Circulars', () => _navigateFromDrawer(const NoticesScreen())),
 
             const Divider(height: 24),
             ListTile(

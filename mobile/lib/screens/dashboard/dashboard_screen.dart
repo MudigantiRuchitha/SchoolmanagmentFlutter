@@ -1,25 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../config/app_theme.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/auth_provider.dart';
-
 import '../branches/branches_screen.dart';
-import '../branches/branch_groups_screen.dart';
 import '../admins/admin_users_screen.dart';
-import '../settings/settings_screen.dart';
-import '../academic/academic_data_screen.dart';
-import '../academic/academic_groups_screen.dart';
 import '../classes/classes_screen.dart';
 import '../students/students_screen.dart';
 import '../staff/staff_screen.dart';
-import '../timetable/timetable_setup_screen.dart';
-import '../attendance/student_attendance_screen.dart';
-import '../attendance/staff_attendance_screen.dart';
-import '../leaves/leave_approvals_screen.dart';
-import '../holidays/holidays_screen.dart';
 import '../notices/notices_screen.dart';
-import '../attendance/face_scanner_screen.dart';
+import '../settings/settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,6 +20,18 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  final List<Color> _avatarColors = const [
+    Color(0xFF6366F1), // Indigo
+    Color(0xFF8B5CF6), // Purple
+    Color(0xFF3B82F6), // Blue
+    Color(0xFF0D9488), // Teal
+    Color(0xFFD97706), // Amber
+    Color(0xFFE11D48), // Rose
+    Color(0xFF10B981), // Emerald
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -38,392 +41,493 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Color _getAvatarColor(String name) {
+    if (name.isEmpty) return _avatarColors[0];
+    final hash = name.codeUnits.fold(0, (acc, c) => acc + c);
+    return _avatarColors[hash % _avatarColors.length];
+  }
+
+  Future<void> _pickDate(BuildContext context, DashboardProvider dash) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: dash.selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      builder: (ctx, child) {
+        return Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF4F46E5),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1E293B),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      dash.setSelectedDate(picked);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final dash = context.watch<DashboardProvider>();
     final auth = context.watch<AuthProvider>();
     final stats = dash.stats;
-    final stuSummary = dash.studentSummary;
-    final stfSummary = dash.staffSummary;
     final user = auth.user;
-    final org = auth.org;
+
+    final todayFormatted = DateFormat('EEEE, MMMM d yyyy').format(DateTime.now());
 
     return RefreshIndicator(
       onRefresh: () => dash.fetchDashboardData(),
-      color: AppTheme.primary,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-          // Greeting & Institution Banner
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withValues(alpha: 0.25),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          (org?.code ?? 'VTS').toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Welcome back, ${user?.name.split(" ").first ?? "Admin"}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 19,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        org?.name ?? 'School Management Portal',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton.filled(
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.25),
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 28),
-                  tooltip: 'Face Biometric Scanner',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const FaceScannerScreen()),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
+      color: const Color(0xFF4F46E5),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 980;
 
-          const SizedBox(height: 18),
-
-          // 4 Key KPI Metrics Cards (Row 1)
-          Row(
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             children: [
-              Expanded(
-                child: _buildKpiCard(
-                  label: 'Students',
-                  value: stats?.totalStudents.toString() ?? '—',
-                  icon: Icons.people_alt_rounded,
-                  color: AppTheme.primary,
-                  bgColor: AppTheme.primaryLight,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentsScreen())),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildKpiCard(
-                  label: 'Staff',
-                  value: stats?.totalStaff.toString() ?? '—',
-                  icon: Icons.badge_rounded,
-                  color: AppTheme.secondary,
-                  bgColor: AppTheme.secondaryLight,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+              // =========================================================
+              // 1. TOP HEADER (Dashboard Title, Date, Bell, User Chip)
+              // =========================================================
+              _buildTopHeader(user, todayFormatted, dash),
+              const SizedBox(height: 18),
 
-          // (Row 2)
-          Row(
-            children: [
-              Expanded(
-                child: _buildKpiCard(
-                  label: 'Classes',
-                  value: stats?.totalClasses.toString() ?? '—',
-                  icon: Icons.meeting_room_rounded,
-                  color: AppTheme.warning,
-                  bgColor: AppTheme.warningLight,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClassesScreen())),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildKpiCard(
-                  label: 'Branches',
-                  value: stats?.totalBranches.toString() ?? '—',
-                  icon: Icons.account_tree_rounded,
-                  color: AppTheme.success,
-                  bgColor: AppTheme.successLight,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BranchesScreen())),
-                ),
-              ),
-            ],
-          ),
+              // =========================================================
+              // 2. 8 STATS KPI CARDS
+              // =========================================================
+              _buildStatsGrid(stats, constraints.maxWidth),
+              const SizedBox(height: 20),
 
-          const SizedBox(height: 24),
-
-          // =========================================================
-          // ALL 16 WEB MANAGEMENT MODULES (GRID)
-          // =========================================================
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'All 16 School Modules',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-              ),
-              Text(
-                'Connected to Live DB',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.success),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          GridView.count(
-            crossAxisCount: 4,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              // 1. Dashboard
-              _buildModuleIcon(Icons.dashboard_rounded, 'Dashboard', AppTheme.primary, () {}),
-              // 2. Branches
-              _buildModuleIcon(Icons.business_rounded, 'Branches', const Color(0xFF0284C7), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BranchesScreen()))),
-              // 3. Branch Groups
-              _buildModuleIcon(Icons.workspaces_rounded, 'Branch Grp', const Color(0xFF0D9488), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BranchGroupsScreen()))),
-              // 4. Admin Users
-              _buildModuleIcon(Icons.admin_panel_settings_rounded, 'Admins', const Color(0xFF4F46E5), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminUsersScreen()))),
-              // 5. Settings
-              _buildModuleIcon(Icons.settings_rounded, 'Settings', const Color(0xFF64748B), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
-              // 6. Academic Data
-              _buildModuleIcon(Icons.menu_book_rounded, 'Acad Data', const Color(0xFF7C3AED), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AcademicDataScreen()))),
-              // 7. Academic Groups
-              _buildModuleIcon(Icons.category_rounded, 'Acad Groups', const Color(0xFF9333EA), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AcademicGroupsScreen()))),
-              // 8. Classes
-              _buildModuleIcon(Icons.school_rounded, 'Classes', const Color(0xFFD97706), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClassesScreen()))),
-              // 9. Staff
-              _buildModuleIcon(Icons.badge_rounded, 'Staff', const Color(0xFF2563EB), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen()))),
-              // 10. Students
-              _buildModuleIcon(Icons.people_alt_rounded, 'Students', const Color(0xFF059669), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentsScreen()))),
-              // 11. Timetable Setup
-              _buildModuleIcon(Icons.schedule_rounded, 'Timetable', const Color(0xFFE11D48), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TimetableSetupScreen()))),
-              // 12. Student Attendance
-              _buildModuleIcon(Icons.how_to_reg_rounded, 'Student Att', const Color(0xFF16A34A), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentAttendanceScreen()))),
-              // 13. Staff Attendance
-              _buildModuleIcon(Icons.access_time_filled_rounded, 'Staff Att', const Color(0xFFEA580C), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffAttendanceScreen()))),
-              // 14. Leave Management
-              _buildModuleIcon(Icons.beach_access_rounded, 'Leaves', const Color(0xFF0284C7), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaveApprovalsScreen()))),
-              // 15. Holidays
-              _buildModuleIcon(Icons.calendar_month_rounded, 'Holidays', const Color(0xFFF59E0B), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HolidaysScreen()))),
-              // 16. Notices
-              _buildModuleIcon(Icons.campaign_rounded, 'Notices', const Color(0xFF8B5CF6), () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticesScreen()))),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // Today's Student Attendance Card
-          _buildAttendanceCard(
-            title: "Today's Student Attendance",
-            icon: Icons.people_alt_rounded,
-            summary: stuSummary,
-          ),
-
-          const SizedBox(height: 16),
-
-          // Today's Staff Attendance Card
-          _buildAttendanceCard(
-            title: "Today's Staff Attendance",
-            icon: Icons.badge_rounded,
-            summary: stfSummary,
-          ),
-
-          const SizedBox(height: 24),
-
-          // Recent Notices Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recent Notices',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NoticesScreen()),
-                  );
-                },
-                child: const Text('View All'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          if (dash.recentNotices.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.campaign_outlined, color: AppTheme.textMuted, size: 36),
-                      SizedBox(height: 8),
-                      Text('No recent notices found', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          else
-            ...dash.recentNotices.take(3).map((notice) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    leading: CircleAvatar(
-                      backgroundColor: notice.isImportant ? AppTheme.dangerLight : AppTheme.primaryLight,
-                      child: Icon(
-                        Icons.campaign_rounded,
-                        color: notice.isImportant ? AppTheme.danger : AppTheme.primary,
-                        size: 20,
+              // =========================================================
+              // 3. MAIN CONTENT: ATTENDANCE & SIDE SUMMARY
+              // =========================================================
+              if (isWide)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left Column (Attendance Card)
+                    Expanded(
+                      flex: 68,
+                      child: _buildAttendanceCard(dash),
+                    ),
+                    const SizedBox(width: 18),
+                    // Right Column (Attendance Summary + Recent Notices)
+                    Expanded(
+                      flex: 32,
+                      child: Column(
+                        children: [
+                          _buildAttendanceSummaryCard(dash),
+                          const SizedBox(height: 18),
+                          _buildRecentNoticesCard(dash),
+                        ],
                       ),
                     ),
-                    title: Text(
-                      notice.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      notice.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                    ),
-                    trailing: notice.isImportant
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.dangerLight,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text('Urgent', style: TextStyle(color: AppTheme.danger, fontSize: 10, fontWeight: FontWeight.bold)),
-                          )
-                        : null,
-                  ),
-                )),
-          const SizedBox(height: 20),
-        ],
+                  ],
+                )
+              else
+                Column(
+                  children: [
+                    _buildAttendanceCard(dash),
+                    const SizedBox(height: 18),
+                    _buildAttendanceSummaryCard(dash),
+                    const SizedBox(height: 18),
+                    _buildRecentNoticesCard(dash),
+                  ],
+                ),
+              const SizedBox(height: 24),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildModuleIcon(IconData icon, String label, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  // =========================================================================
+  // TOP HEADER
+  // =========================================================================
+  Widget _buildTopHeader(dynamic user, String todayFormatted, DashboardProvider dash) {
+    final rawName = user?.name ?? 'Admin';
+    final nameInitials = rawName.trim().isNotEmpty
+        ? rawName.trim().split(' ').map((p) => p.isNotEmpty ? p[0].toUpperCase() : '').take(2).join()
+        : 'AC';
+
+    final noticeCount = dash.recentNotices.length;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+            const Text(
+              'Dashboard',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+                letterSpacing: -0.4,
               ),
-              child: Icon(icon, color: color, size: 20),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 2),
             Text(
-              label,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              'Today: $todayFormatted',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
             ),
           ],
         ),
-      ),
+        Row(
+          children: [
+            // Notification Bell with Badge
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NoticesScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(Icons.notifications_outlined, size: 20, color: Color(0xFF1E293B)),
+                    if (noticeCount > 0)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                          child: Text(
+                            '$noticeCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // User Avatar Chip
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        nameInitials.isNotEmpty ? nameInitials : 'AC',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      rawName.toLowerCase(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _buildKpiCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required Color bgColor,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+  // =========================================================================
+  // 8 STATS CARDS GRID
+  // =========================================================================
+  Widget _buildStatsGrid(dynamic stats, double screenWidth) {
+    final cards = [
+      _StatData(
+        label: 'Total Students',
+        value: stats?.totalStudents.toString() ?? '—',
+        icon: Icons.school_rounded,
+        color: const Color(0xFF2563EB),
+        bgColor: const Color(0xFFEFF6FF),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentsScreen())),
+      ),
+      _StatData(
+        label: 'Teaching Staff',
+        value: stats?.teachingStaff.toString() ?? '—',
+        icon: Icons.groups_rounded,
+        color: const Color(0xFF10B981),
+        bgColor: const Color(0xFFECFDF5),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+      ),
+      _StatData(
+        label: 'Non-Teaching',
+        value: stats?.nonTeachingStaff.toString() ?? '—',
+        icon: Icons.person_rounded,
+        color: const Color(0xFFF59E0B),
+        bgColor: const Color(0xFFFFFBEB),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+      ),
+      _StatData(
+        label: 'Management',
+        value: stats?.managementStaff.toString() ?? '—',
+        icon: Icons.admin_panel_settings_rounded,
+        color: const Color(0xFF8B5CF6),
+        bgColor: const Color(0xFFF5F3FF),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+      ),
+      _StatData(
+        label: 'Total Staff',
+        value: stats?.totalStaff.toString() ?? '—',
+        icon: Icons.people_alt_rounded,
+        color: const Color(0xFFEA580C),
+        bgColor: const Color(0xFFFFF7ED),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+      ),
+      _StatData(
+        label: 'Admin Users',
+        value: stats?.totalAdmins.toString() ?? '—',
+        icon: Icons.security_rounded,
+        color: const Color(0xFFEF4444),
+        bgColor: const Color(0xFFFEF2F2),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminUsersScreen())),
+      ),
+      _StatData(
+        label: 'Classes',
+        value: stats?.totalClasses.toString() ?? '—',
+        icon: Icons.category_rounded,
+        color: const Color(0xFF14B8A6),
+        bgColor: const Color(0xFFF0FDFA),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClassesScreen())),
+      ),
+      _StatData(
+        label: 'Branches',
+        value: stats?.totalBranches.toString() ?? '—',
+        icon: Icons.business_rounded,
+        color: const Color(0xFF6366F1),
+        bgColor: const Color(0xFFEEF2FF),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BranchesScreen())),
+      ),
+    ];
+
+    if (screenWidth >= 1150) {
+      // 5 on top, 3 on bottom matching screenshot
+      return Column(
+        children: [
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(10),
+              for (int i = 0; i < 5; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                Expanded(child: _buildStatCard(cards[i])),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (int i = 5; i < 8; i++) ...[
+                if (i > 5) const SizedBox(width: 12),
+                Expanded(child: _buildStatCard(cards[i])),
+              ],
+              const SizedBox(width: 12),
+              const Expanded(child: SizedBox()),
+              const SizedBox(width: 12),
+              const Expanded(child: SizedBox()),
+            ],
+          ),
+        ],
+      );
+    } else if (screenWidth >= 700) {
+      // 4 cards per row
+      return Column(
+        children: [
+          Row(
+            children: [
+              for (int i = 0; i < 4; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                Expanded(child: _buildStatCard(cards[i])),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (int i = 4; i < 8; i++) ...[
+                if (i > 4) const SizedBox(width: 12),
+                Expanded(child: _buildStatCard(cards[i])),
+              ],
+            ],
+          ),
+        ],
+      );
+    } else {
+      // 2 cards per row on mobile
+      return Column(
+        children: [
+          for (int r = 0; r < 4; r++) ...[
+            if (r > 0) const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _buildStatCard(cards[r * 2])),
+                const SizedBox(width: 10),
+                Expanded(child: _buildStatCard(cards[r * 2 + 1])),
+              ],
+            ),
+          ],
+        ],
+      );
+    }
+  }
+
+  Widget _buildStatCard(_StatData data) {
+    return InkWell(
+      onTap: data.onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 74,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            children: [
+              // Decorative background bubble in top right
+              Positioned(
+                top: -18,
+                right: -18,
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: data.color.withValues(alpha: 0.07),
+                  ),
                 ),
-                child: Icon(icon, color: color, size: 24),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                        letterSpacing: -0.5,
-                      ),
+
+              // Left colored border accent strip
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: data.color,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(14),
+                      bottomLeft: Radius.circular(14),
                     ),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: data.bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(data.icon, color: data.color, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            data.value,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1E293B),
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            data.label,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -436,78 +540,991 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAttendanceCard({
-    required String title,
-    required IconData icon,
-    required dynamic summary,
-  }) {
+  // =========================================================================
+  // TODAY'S ATTENDANCE CARD
+  // =========================================================================
+  Widget _buildAttendanceCard(DashboardProvider dash) {
+    final summary = dash.attendanceSummary;
     final total = summary?.total ?? 0;
     final present = summary?.present ?? 0;
     final absent = summary?.absent ?? 0;
     final late = summary?.late ?? 0;
-    final halfDay = summary?.halfDay ?? 0;
-    final pct = total > 0 ? (present / total) * 100 : 0.0;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: AppTheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-                ),
-                const Spacer(),
-                Text(
-                  '${pct.toStringAsFixed(0)}% Present',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.success),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: total > 0 ? (present / total).clamp(0.0, 1.0) : 0,
-                minHeight: 8,
-                backgroundColor: AppTheme.border,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.success),
+    final dateFormatted = DateFormat('MM/dd/yyyy').format(dash.selectedDate);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Purple Gradient Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
               ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Row(
               children: [
-                _buildStatPill('Total', total.toString(), AppTheme.textSecondary),
-                _buildStatPill('Present', present.toString(), AppTheme.success),
-                _buildStatPill('Absent', absent.toString(), AppTheme.danger),
-                _buildStatPill('Late', late.toString(), AppTheme.warning),
-                _buildStatPill('Half Day', halfDay.toString(), AppTheme.purpleBadge),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.event_note_rounded, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Today's Attendance",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        "Attendance overview for selected date",
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Date picker button
+                InkWell(
+                  onTap: () => _pickDate(context, dash),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF4F46E5)),
+                        const SizedBox(width: 6),
+                        Text(
+                          dateFormatted,
+                          style: const TextStyle(
+                            color: Color(0xFF1E293B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.calendar_month, size: 14, color: Color(0xFF64748B)),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
-          ],
+          ),
+
+          // 2. Filter & Search Controls Bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // Left Controls: Tabs + Dropdowns
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // Tabs: [Students] [Staff]
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildTabButton('Students', dash.attType == 'student', () {
+                            dash.setAttType('student');
+                          }),
+                          _buildTabButton('Staff', dash.attType == 'staff', () {
+                            dash.setAttType('staff');
+                          }),
+                        ],
+                      ),
+                    ),
+
+                    // Branch Dropdown
+                    Builder(builder: (context) {
+                      final branchExists = dash.selectedBranchId == null ||
+                          dash.branches.any((b) => b['id']?.toString() == dash.selectedBranchId);
+                      final currentBranch = branchExists ? dash.selectedBranchId : null;
+
+                      return Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: currentBranch,
+                            hint: const Text('All Branches', style: TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('All Branches'),
+                              ),
+                              ...dash.branches.map((b) {
+                                return DropdownMenuItem<String?>(
+                                  value: b['id']?.toString(),
+                                  child: Text(b['name'] ?? 'Branch'),
+                                );
+                              }),
+                            ],
+                            onChanged: (val) => dash.setSelectedBranch(val),
+                          ),
+                        ),
+                      );
+                    }),
+
+                    // Class Dropdown (if student mode and classes available)
+                    if (dash.attType == 'student' && dash.classes.isNotEmpty)
+                      Builder(builder: (context) {
+                        final classExists = dash.selectedClassId == null ||
+                            dash.classes.any((c) => c['id']?.toString() == dash.selectedClassId);
+                        final currentClass = classExists ? dash.selectedClassId : null;
+
+                        return Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String?>(
+                              value: currentClass,
+                              hint: const Text('All Classes', style: TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text('All Classes'),
+                                ),
+                                ...dash.classes.map((c) {
+                                  final name = "${c['name'] ?? ''} ${c['section'] ?? ''}".trim();
+                                  return DropdownMenuItem<String?>(
+                                    value: c['id']?.toString(),
+                                    child: Text(name.isNotEmpty ? name : 'Class'),
+                                  );
+                                }),
+                              ],
+                              onChanged: (val) => dash.setSelectedClass(val),
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+
+                // Right: Search Input
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 180, maxWidth: 240),
+                  child: Container(
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        hintText: 'Search attendance...',
+                        hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                        prefixIcon: const Icon(Icons.search, size: 16, color: Color(0xFF94A3B8)),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 16),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? InkWell(
+                                onTap: () {
+                                  _searchController.clear();
+                                  dash.setSearchTerm('');
+                                },
+                                child: const Icon(Icons.clear, size: 14, color: Color(0xFF94A3B8)),
+                              )
+                            : null,
+                      ),
+                      onChanged: (val) => dash.setSearchTerm(val),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 3. 4 Attendance Summary KPI Boxes
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(child: _buildAttendanceKpiBox('TOTAL', total.toString(), const Color(0xFF2563EB))),
+                const SizedBox(width: 10),
+                Expanded(child: _buildAttendanceKpiBox('PRESENT', present.toString(), const Color(0xFF10B981))),
+                const SizedBox(width: 10),
+                Expanded(child: _buildAttendanceKpiBox('ABSENT', absent.toString(), const Color(0xFFEF4444))),
+                const SizedBox(width: 10),
+                Expanded(child: _buildAttendanceKpiBox('LATE', late.toString(), const Color(0xFFF59E0B))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // 4. Attendance Table
+          _buildAttendanceTable(dash),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton(String label, bool active, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.bold : FontWeight.w500,
+            color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStatPill(String label, String value, Color color) {
-    return Column(
+  Widget _buildAttendanceKpiBox(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Left vertical color accent
+          Positioned(
+            left: -10,
+            top: -10,
+            bottom: -10,
+            child: Container(
+              width: 3.5,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(8),
+                  bottomLeft: Radius.circular(8),
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // ATTENDANCE TABLE
+  // =========================================================================
+  Widget _buildAttendanceTable(DashboardProvider dash) {
+    if (dash.isAttendanceLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(40),
+        child: Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF4F46E5)),
+          ),
+        ),
+      );
+    }
+
+    final records = dash.filteredRecords;
+
+    if (records.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+        child: Center(
+          child: Text(
+            'No attendance records found',
+            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth < 620 ? 620 : constraints.maxWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Table Header Row
+                Container(
+                  color: const Color(0xFFF8FAFC),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        flex: 3,
+                        child: Text(
+                          'NAME',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          dash.attType == 'student' ? 'CLASS' : 'ROLE',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                      const Expanded(
+                        flex: 2,
+                        child: Text(
+                          'BRANCH',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                      const Expanded(
+                        flex: 2,
+                        child: Text(
+                          'PUNCH TIME',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                      const Expanded(
+                        flex: 1,
+                        child: Text(
+                          'STATUS',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+                // Table Data Rows
+                ...records.map((r) {
+                  final record = r is Map ? r : <String, dynamic>{};
+                  final fullName = (record['full_name'] ?? 'Unknown').toString();
+                  final subId = dash.attType == 'student'
+                      ? (record['admission_no'] ?? '').toString()
+                      : (record['staff_id'] ?? '').toString();
+
+                  final classOrRole = dash.attType == 'student'
+                      ? '${record['class_name'] ?? ''} ${record['section'] ?? ''}'.trim()
+                      : (record['role_type'] ?? record['designation'] ?? '—').toString();
+
+                  final branchName = (record['branch_name'] ?? '—').toString();
+                  final punchTime = (record['check_in'] ?? record['check_out'] ?? '—').toString();
+                  final status = record['status']?.toString();
+
+                  final avatarColor = _getAvatarColor(fullName);
+                  final firstChar = fullName.isNotEmpty ? fullName[0].toUpperCase() : '?';
+
+                  return Container(
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    child: Row(
+                      children: [
+                        // NAME + Avatar + Sub ID
+                        Expanded(
+                          flex: 3,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                backgroundColor: avatarColor,
+                                child: Text(
+                                  firstChar,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      fullName,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (subId.isNotEmpty)
+                                      Text(
+                                        subId,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // CLASS / ROLE
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            classOrRole.isNotEmpty ? classOrRole : '—',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        // BRANCH
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            branchName,
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        // PUNCH TIME
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            punchTime,
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        // STATUS
+                        Expanded(
+                          flex: 1,
+                          child: _buildStatusBadge(status),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusBadge(String? status) {
+    if (status == null || status.isEmpty) {
+      return const Text('—', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13));
+    }
+
+    Color bg;
+    Color fg;
+    Color border;
+
+    switch (status.toLowerCase()) {
+      case 'present':
+        bg = const Color(0xFFDCFCE7);
+        fg = const Color(0xFF16A34A);
+        border = const Color(0xFF86EFAC);
+        break;
+      case 'absent':
+        bg = const Color(0xFFFEE2E2);
+        fg = const Color(0xFFDC2626);
+        border = const Color(0xFFFCA5A5);
+        break;
+      case 'late':
+        bg = const Color(0xFFFEF3C7);
+        fg = const Color(0xFFD97706);
+        border = const Color(0xFFFDE68A);
+        break;
+      case 'half-day':
+        bg = const Color(0xFFF3E8FF);
+        fg = const Color(0xFF9333EA);
+        border = const Color(0xFFD8B4FE);
+        break;
+      default:
+        bg = const Color(0xFFF1F5F9);
+        fg = const Color(0xFF64748B);
+        border = const Color(0xFFCBD5E1);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: border, width: 0.8),
+      ),
+      child: Text(
+        status.toLowerCase(),
+        style: TextStyle(
+          color: fg,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  // =========================================================================
+  // ATTENDANCE SUMMARY CARD (RIGHT COLUMN)
+  // =========================================================================
+  Widget _buildAttendanceSummaryCard(DashboardProvider dash) {
+    final summary = dash.attendanceSummary;
+    final present = summary?.present ?? 0;
+    final absent = summary?.absent ?? 0;
+    final late = summary?.late ?? 0;
+    final total = present + absent + late;
+
+    final hasData = total > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Attendance Summary',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Daily attendance breakdown',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.trending_up_rounded, color: Color(0xFF16A34A), size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Body: Donut Chart or No Data
+          if (!hasData)
+            const SizedBox(
+              height: 140,
+              child: Center(
+                child: Text(
+                  'No attendance data available.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            SizedBox(
+              height: 160,
+              child: PieChart(
+                PieChartData(
+                  sectionsSpace: 3,
+                  centerSpaceRadius: 42,
+                  sections: [
+                    if (present > 0)
+                      PieChartSectionData(
+                        color: const Color(0xFF10B981),
+                        value: present.toDouble(),
+                        showTitle: false,
+                        radius: 20,
+                      ),
+                    if (absent > 0)
+                      PieChartSectionData(
+                        color: const Color(0xFFEF4444),
+                        value: absent.toDouble(),
+                        showTitle: false,
+                        radius: 20,
+                      ),
+                    if (late > 0)
+                      PieChartSectionData(
+                        color: const Color(0xFFF59E0B),
+                        value: late.toDouble(),
+                        showTitle: false,
+                        radius: 20,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildLegendItem('Present', present, const Color(0xFF10B981)),
+                _buildLegendItem('Absent', absent, const Color(0xFFEF4444)),
+                _buildLegendItem('Late', late, const Color(0xFFF59E0B)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, int count, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
         Text(
-          value,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+          '$label: ',
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
         ),
         Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+          '$count',
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
         ),
       ],
     );
   }
+
+  // =========================================================================
+  // RECENT NOTICES CARD (RIGHT COLUMN)
+  // =========================================================================
+  Widget _buildRecentNoticesCard(DashboardProvider dash) {
+    final notices = dash.recentNotices;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recent Notices',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Latest announcements',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3E8FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF9333EA), size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Body: List or Empty
+          if (notices.isEmpty)
+            const SizedBox(
+              height: 100,
+              child: Center(
+                child: Text(
+                  'No notices available.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: notices.take(3).map((notice) {
+                return InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NoticesScreen()),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: notice.isImportant ? const Color(0xFFFEE2E2) : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.campaign_rounded,
+                            size: 16,
+                            color: notice.isImportant ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      notice.title,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (notice.isImportant)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEE2E2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Urgent',
+                                        style: TextStyle(
+                                          color: Color(0xFFDC2626),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                notice.content,
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatData {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final Color bgColor;
+  final VoidCallback? onTap;
+
+  _StatData({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.bgColor,
+    this.onTap,
+  });
 }

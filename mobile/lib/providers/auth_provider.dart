@@ -25,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
   String get currentBaseUrl => _storage.getBaseUrl();
   String get baseUrl => _storage.getBaseUrl();
   String? get savedOrgCode => _storage.getOrgCode();
+  String? get savedUsername => _storage.getUsername();
 
   void _loadFromStorage() {
     _user = _storage.getUser();
@@ -76,6 +77,7 @@ class AuthProvider extends ChangeNotifier {
         final token = res['token'] as String;
         await _storage.setToken(token);
         await _storage.setOrgCode(orgCode);
+        await _storage.setUsername(username);
         await _storage.setRememberMe(rememberMe);
 
         if (res['user'] != null) {

@@ -1,12 +1,20 @@
 class DashboardStats {
   final int totalStudents;
+  final int teachingStaff;
+  final int nonTeachingStaff;
+  final int managementStaff;
   final int totalStaff;
+  final int totalAdmins;
   final int totalClasses;
   final int totalBranches;
 
   DashboardStats({
     required this.totalStudents,
+    required this.teachingStaff,
+    required this.nonTeachingStaff,
+    required this.managementStaff,
     required this.totalStaff,
+    required this.totalAdmins,
     required this.totalClasses,
     required this.totalBranches,
   });
@@ -14,7 +22,11 @@ class DashboardStats {
   factory DashboardStats.fromJson(Map<String, dynamic> json) {
     return DashboardStats(
       totalStudents: int.tryParse((json['total_students'] ?? json['totalStudents'])?.toString() ?? '0') ?? 0,
+      teachingStaff: int.tryParse((json['teaching_staff'] ?? json['teachingStaff'])?.toString() ?? '0') ?? 0,
+      nonTeachingStaff: int.tryParse((json['non_teaching_staff'] ?? json['nonTeachingStaff'])?.toString() ?? '0') ?? 0,
+      managementStaff: int.tryParse((json['management_staff'] ?? json['managementStaff'])?.toString() ?? '0') ?? 0,
       totalStaff: int.tryParse((json['total_staff'] ?? json['totalStaff'])?.toString() ?? '0') ?? 0,
+      totalAdmins: int.tryParse((json['total_admins'] ?? json['totalAdmins'])?.toString() ?? '0') ?? 0,
       totalClasses: int.tryParse((json['total_classes'] ?? json['totalClasses'])?.toString() ?? '0') ?? 0,
       totalBranches: int.tryParse((json['total_branches'] ?? json['totalBranches'])?.toString() ?? '0') ?? 0,
     );
@@ -51,4 +63,3 @@ class AttendanceSummary {
   double get latePercent => total > 0 ? (late / total) * 100 : 0.0;
   double get halfDayPercent => total > 0 ? (halfDay / total) * 100 : 0.0;
 }
-

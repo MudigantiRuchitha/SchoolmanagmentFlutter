@@ -10,6 +10,7 @@ class StorageService {
   static const String _keyOrgCode = 'saved_org_code';
   static const String _keyBaseUrl = 'custom_base_url';
   static const String _keyRememberMe = 'remember_me';
+  static const String _keyUsername = 'saved_username';
 
   late SharedPreferences _prefs;
 
@@ -54,13 +55,17 @@ class StorageService {
   String? getOrgCode() => _prefs.getString(_keyOrgCode);
   Future<void> setOrgCode(String code) => _prefs.setString(_keyOrgCode, code);
 
+  // Username
+  String? getUsername() => _prefs.getString(_keyUsername);
+  Future<void> setUsername(String username) => _prefs.setString(_keyUsername, username);
+
   // Base URL
   String getBaseUrl() {
     final val = _prefs.getString(_keyBaseUrl);
-    if (val == null || val.contains('localhost') || val.contains('10.0.2.2')) {
-      return ApiConstants.defaultBaseUrl;
+    if (val != null && val.trim().isNotEmpty) {
+      return val.trim();
     }
-    return val;
+    return ApiConstants.defaultBaseUrl;
   }
 
   Future<void> setBaseUrl(String url) => _prefs.setString(_keyBaseUrl, url);

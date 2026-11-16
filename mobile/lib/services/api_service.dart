@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../config/api_constants.dart';
 import 'storage_service.dart';
@@ -72,10 +73,12 @@ class ApiService {
             const Duration(seconds: 15),
           );
       return _handleResponse(res);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Check if backend server is running and accessible at $_baseUrl');
     } on SocketException {
-      throw ApiException('Cannot connect to server. Check IP & port in settings.');
+      throw ApiException('Cannot connect to server at $_baseUrl. Check server status or settings.');
     } on http.ClientException {
-      throw ApiException('Network connection failed. Please check internet.');
+      throw ApiException('Network connection failed. Check if server is running at $_baseUrl.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw ApiException(e.toString());
@@ -90,8 +93,12 @@ class ApiService {
           .post(uri, headers: _buildHeaders(), body: jsonEncode(body))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(res);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Check if backend server is running and accessible at $_baseUrl');
     } on SocketException {
-      throw ApiException('Cannot connect to server. Check IP & port in settings.');
+      throw ApiException('Cannot connect to server at $_baseUrl. Check server status or settings.');
+    } on http.ClientException {
+      throw ApiException('Network connection failed. Check if server is running at $_baseUrl.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw ApiException(e.toString());
@@ -106,8 +113,12 @@ class ApiService {
           .put(uri, headers: _buildHeaders(), body: jsonEncode(body))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(res);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Check if backend server is running and accessible at $_baseUrl');
     } on SocketException {
-      throw ApiException('Cannot connect to server. Check IP & port in settings.');
+      throw ApiException('Cannot connect to server at $_baseUrl. Check server status or settings.');
+    } on http.ClientException {
+      throw ApiException('Network connection failed. Check if server is running at $_baseUrl.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw ApiException(e.toString());
@@ -122,8 +133,12 @@ class ApiService {
           .delete(uri, headers: _buildHeaders())
           .timeout(const Duration(seconds: 15));
       return _handleResponse(res);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Check if backend server is running and accessible at $_baseUrl');
     } on SocketException {
-      throw ApiException('Cannot connect to server. Check IP & port in settings.');
+      throw ApiException('Cannot connect to server at $_baseUrl. Check server status or settings.');
+    } on http.ClientException {
+      throw ApiException('Network connection failed. Check if server is running at $_baseUrl.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw ApiException(e.toString());
@@ -168,11 +183,19 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getTodayAttendance({
-    required String type, // 'students' or 'staff'
+    required String type, // 'student' or 'staff'
     String? date,
+    dynamic branchId,
+    dynamic classId,
   }) async {
-    final params = {'type': type};
-    if (date != null) params['date'] = date;
+    final params = <String, dynamic>{'type': type};
+    if (date != null && date.isNotEmpty) params['date'] = date;
+    if (branchId != null && branchId.toString().isNotEmpty) {
+      params['branch_id'] = branchId.toString();
+    }
+    if (classId != null && classId.toString().isNotEmpty) {
+      params['class_id'] = classId.toString();
+    }
     final res = await get(ApiConstants.dashboardAttendanceToday, params);
     return res as Map<String, dynamic>;
   }
