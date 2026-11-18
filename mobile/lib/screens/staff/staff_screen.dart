@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
 import '../../models/staff_model.dart';
 import '../../providers/staff_provider.dart';
+import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
+import '../../widgets/admin_ui.dart';
 
 class StaffScreen extends StatefulWidget {
   const StaffScreen({super.key});
@@ -14,13 +18,29 @@ class StaffScreen extends StatefulWidget {
 
 class _StaffScreenState extends State<StaffScreen> {
   final _searchController = TextEditingController();
+  late final ApiService _api;
+  List<dynamic> _branches = [];
+  String _statusFilter = 'all';
 
   @override
   void initState() {
     super.initState();
+    _api = ApiService(StorageService());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StaffProvider>().fetchStaff();
+      _loadBranches();
     });
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final branches = await _api.getBranches();
+      if (mounted) setState(() => _branches = branches);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Unable to load branches: $e')));
+    }
   }
 
   @override
@@ -59,8 +79,14 @@ class _StaffScreenState extends State<StaffScreen> {
                   radius: 28,
                   backgroundColor: AppTheme.primaryLight,
                   child: Text(
-                    member.fullName.isNotEmpty ? member.fullName[0].toUpperCase() : 'S',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                    member.fullName.isNotEmpty
+                        ? member.fullName[0].toUpperCase()
+                        : 'S',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -70,12 +96,19 @@ class _StaffScreenState extends State<StaffScreen> {
                     children: [
                       Text(
                         member.fullName,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         member.designation ?? member.roleType.toUpperCase(),
-                        style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -84,13 +117,40 @@ class _StaffScreenState extends State<StaffScreen> {
               ],
             ),
             const Divider(height: 28),
-            _buildInfoTile(Icons.badge_outlined, 'Staff ID', member.staffId ?? '#${member.id}', ctx),
-            _buildInfoTile(Icons.schedule_rounded, 'Working Hours', '${member.expectedCheckIn} – ${member.expectedCheckOut}', ctx),
-            _buildInfoTile(Icons.business_outlined, 'Campus / Branch', member.branchName ?? 'Main Branch', ctx),
+            _buildInfoTile(
+              Icons.badge_outlined,
+              'Staff ID',
+              member.staffId ?? '#${member.id}',
+              ctx,
+            ),
+            _buildInfoTile(
+              Icons.schedule_rounded,
+              'Working Hours',
+              '${member.expectedCheckIn} – ${member.expectedCheckOut}',
+              ctx,
+            ),
+            _buildInfoTile(
+              Icons.business_outlined,
+              'Campus / Branch',
+              member.branchName ?? 'Main Branch',
+              ctx,
+            ),
             if (member.phone != null && member.phone!.isNotEmpty)
-              _buildInfoTile(Icons.phone_outlined, 'Phone', member.phone!, ctx, isCopyable: true),
+              _buildInfoTile(
+                Icons.phone_outlined,
+                'Phone',
+                member.phone!,
+                ctx,
+                isCopyable: true,
+              ),
             if (member.email != null && member.email!.isNotEmpty)
-              _buildInfoTile(Icons.email_outlined, 'Email', member.email!, ctx, isCopyable: true),
+              _buildInfoTile(
+                Icons.email_outlined,
+                'Email',
+                member.email!,
+                ctx,
+                isCopyable: true,
+              ),
             const SizedBox(height: 16),
           ],
         ),
@@ -98,7 +158,13 @@ class _StaffScreenState extends State<StaffScreen> {
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String label, String value, BuildContext ctx, {bool isCopyable = false}) {
+  Widget _buildInfoTile(
+    IconData icon,
+    String label,
+    String value,
+    BuildContext ctx, {
+    bool isCopyable = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -109,18 +175,38 @@ class _StaffScreenState extends State<StaffScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
-                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
               ],
             ),
           ),
           if (isCopyable)
             IconButton(
-              icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.primary),
+              icon: const Icon(
+                Icons.copy_rounded,
+                size: 18,
+                color: AppTheme.primary,
+              ),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(content: Text('$label copied to clipboard'), duration: const Duration(seconds: 1)),
+                  SnackBar(
+                    content: Text('$label copied to clipboard'),
+                    duration: const Duration(seconds: 1),
+                  ),
                 );
               },
             ),
@@ -154,8 +240,14 @@ class _StaffScreenState extends State<StaffScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold),
+      ),
     );
   }
 
@@ -163,6 +255,11 @@ class _StaffScreenState extends State<StaffScreen> {
   Widget build(BuildContext context) {
     final staffProv = context.watch<StaffProvider>();
     final staffList = staffProv.staff;
+    final visibleStaff = staffList.where((member) {
+      if (_statusFilter == 'active') return member.isActive;
+      if (_statusFilter == 'inactive') return !member.isActive;
+      return true;
+    }).toList();
 
     return Scaffold(
       body: RefreshIndicator(
@@ -170,6 +267,10 @@ class _StaffScreenState extends State<StaffScreen> {
         color: AppTheme.primary,
         child: Column(
           children: [
+            const AdminPageHeading(
+              title: 'Staff',
+              subtitle: 'Manage teaching, non-teaching, and management staff.',
+            ),
             // Search & Category Filters
             Container(
               padding: const EdgeInsets.all(14),
@@ -190,23 +291,172 @@ class _StaffScreenState extends State<StaffScreen> {
                               },
                             )
                           : null,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                     onChanged: (v) => staffProv.setSearch(v),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int?>(
+                          initialValue: staffProv.selectedBranchId,
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            prefixIcon: Icon(Icons.business_outlined, size: 18),
+                          ),
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('All Branches'),
+                            ),
+                            ..._branches.map((branch) {
+                              final id = branch['id'] is int
+                                  ? branch['id'] as int
+                                  : int.tryParse(branch['id'].toString());
+                              return DropdownMenuItem<int?>(
+                                value: id,
+                                child: Text(
+                                  branch['name']?.toString() ?? 'Branch',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }),
+                          ],
+                          onChanged: (value) => staffProv.setBranch(value),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _statusFilter,
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.toggle_on_outlined,
+                              size: 18,
+                            ),
+                          ),
+                          isExpanded: true,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text('All Status'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'active',
+                              child: Text('Active'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'inactive',
+                              child: Text('Inactive'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _statusFilter = value);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        _filterChip(label: 'All Roles', selected: staffProv.selectedRoleType == null, onTap: () => staffProv.setRoleType(null)),
+                        _filterChip(
+                          label: 'All Roles',
+                          selected: staffProv.selectedRoleType == null,
+                          onTap: () => staffProv.setRoleType(null),
+                        ),
                         const SizedBox(width: 8),
-                        _filterChip(label: 'Teaching', selected: staffProv.selectedRoleType == 'teaching', onTap: () => staffProv.setRoleType('teaching')),
+                        _filterChip(
+                          label: 'Teaching',
+                          selected: staffProv.selectedRoleType == 'teaching',
+                          onTap: () => staffProv.setRoleType('teaching'),
+                        ),
                         const SizedBox(width: 8),
-                        _filterChip(label: 'Non-Teaching', selected: staffProv.selectedRoleType == 'non-teaching', onTap: () => staffProv.setRoleType('non-teaching')),
+                        _filterChip(
+                          label: 'Non-Teaching',
+                          selected:
+                              staffProv.selectedRoleType == 'non-teaching',
+                          onTap: () => staffProv.setRoleType('non-teaching'),
+                        ),
                         const SizedBox(width: 8),
-                        _filterChip(label: 'Management', selected: staffProv.selectedRoleType == 'management', onTap: () => staffProv.setRoleType('management')),
+                        _filterChip(
+                          label: 'Management',
+                          selected: staffProv.selectedRoleType == 'management',
+                          onTap: () => staffProv.setRoleType('management'),
+                        ),
                       ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(
+              height: 88,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                scrollDirection: Axis.horizontal,
+                children: [
+                  SizedBox(
+                    width: 158,
+                    child: AdminMetricCard(
+                      label: 'Total Staff',
+                      value: '${staffList.length}',
+                      icon: Icons.groups_rounded,
+                      color: AppTheme.primary,
+                      backgroundColor: AppTheme.primaryLight,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 158,
+                    child: AdminMetricCard(
+                      label: 'Teaching',
+                      value:
+                          '${staffList.where((s) => s.roleType == 'teaching').length}',
+                      icon: Icons.menu_book_rounded,
+                      color: AppTheme.success,
+                      backgroundColor: AppTheme.successLight,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 158,
+                    child: AdminMetricCard(
+                      label: 'Non-Teaching',
+                      value:
+                          '${staffList.where((s) => s.roleType == 'non-teaching' || s.roleType == 'non_teaching').length}',
+                      icon: Icons.support_agent_rounded,
+                      color: AppTheme.warning,
+                      backgroundColor: AppTheme.warningLight,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 158,
+                    child: AdminMetricCard(
+                      label: 'Management',
+                      value:
+                          '${staffList.where((s) => s.roleType == 'management').length}',
+                      icon: Icons.admin_panel_settings_rounded,
+                      color: AppTheme.secondary,
+                      backgroundColor: AppTheme.secondaryLight,
                     ),
                   ),
                 ],
@@ -219,8 +469,12 @@ class _StaffScreenState extends State<StaffScreen> {
               child: Row(
                 children: [
                   Text(
-                    '${staffList.length} Staff Members Found',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                    '${visibleStaff.length} Staff Members Found',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -230,83 +484,140 @@ class _StaffScreenState extends State<StaffScreen> {
             Expanded(
               child: staffProv.isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : staffList.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.badge_outlined, size: 48, color: AppTheme.textMuted),
-                              SizedBox(height: 12),
-                              Text('No staff members found.', style: TextStyle(color: AppTheme.textSecondary)),
-                            ],
+                  : visibleStaff.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.badge_outlined,
+                            size: 48,
+                            color: AppTheme.textMuted,
                           ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.only(left: 14, right: 14, bottom: 80),
-                          itemCount: staffList.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (ctx, idx) {
-                            final member = staffList[idx];
-                            return Card(
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                leading: CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: AppTheme.primaryLight,
+                          SizedBox(height: 12),
+                          Text(
+                            'No staff members found.',
+                            style: TextStyle(color: AppTheme.textSecondary),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.only(
+                        left: 14,
+                        right: 14,
+                        bottom: 80,
+                      ),
+                      itemCount: visibleStaff.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, idx) {
+                        final member = visibleStaff[idx];
+                        return Card(
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            leading: CircleAvatar(
+                              radius: 22,
+                              backgroundColor: AppTheme.primaryLight,
+                              child: Text(
+                                member.fullName.isNotEmpty
+                                    ? member.fullName[0].toUpperCase()
+                                    : 'S',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primary,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(
                                   child: Text(
-                                    member.fullName.isNotEmpty ? member.fullName[0].toUpperCase() : 'S',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary, fontSize: 16),
+                                    member.fullName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                title: Row(
+                                const SizedBox(width: 6),
+                                _buildRoleBadge(member.roleType),
+                              ],
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${member.designation ?? "Staff"} • ID: ${member.staffId ?? "#${member.id}"}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
                                   children: [
-                                    Expanded(
-                                      child: Text(
-                                        member.fullName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textPrimary),
-                                        overflow: TextOverflow.ellipsis,
+                                    const Icon(
+                                      Icons.schedule_rounded,
+                                      size: 13,
+                                      color: AppTheme.textMuted,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${member.expectedCheckIn} – ${member.expectedCheckOut}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.textMuted,
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    _buildRoleBadge(member.roleType),
-                                  ],
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${member.designation ?? "Staff"} • ID: ${member.staffId ?? "#${member.id}"}',
-                                      style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                      member.isActive ? 'Active' : 'Inactive',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: member.isActive
+                                            ? AppTheme.success
+                                            : AppTheme.danger,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.schedule_rounded, size: 13, color: AppTheme.textMuted),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${member.expectedCheckIn} – ${member.expectedCheckOut}',
-                                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                    if (member.branchName != null) ...[
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        '•',
+                                        style: TextStyle(
+                                          color: AppTheme.textMuted,
                                         ),
-                                        if (member.branchName != null) ...[
-                                          const SizedBox(width: 8),
-                                          const Text('•', style: TextStyle(color: AppTheme.textMuted)),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            member.branchName!,
-                                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        member.branchName!,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppTheme.textMuted,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
-                                trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted),
-                                onTap: () => _showStaffDetailsSheet(context, member),
-                              ),
-                            );
-                          },
-                        ),
+                              ],
+                            ),
+                            trailing: const Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppTheme.textMuted,
+                            ),
+                            onTap: () =>
+                                _showStaffDetailsSheet(context, member),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -314,7 +625,11 @@ class _StaffScreenState extends State<StaffScreen> {
     );
   }
 
-  Widget _filterChip({required String label, required bool selected, required VoidCallback onTap}) {
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -323,7 +638,9 @@ class _StaffScreenState extends State<StaffScreen> {
         decoration: BoxDecoration(
           color: selected ? AppTheme.primary : AppTheme.cardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? AppTheme.primary : AppTheme.border),
+          border: Border.all(
+            color: selected ? AppTheme.primary : AppTheme.border,
+          ),
         ),
         child: Text(
           label,

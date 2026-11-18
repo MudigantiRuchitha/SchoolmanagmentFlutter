@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'config/app_theme.dart';
 import 'providers/attendance_provider.dart';
 import 'providers/auth_provider.dart';
@@ -19,10 +20,7 @@ void main() async {
 
   final apiService = ApiService(storageService);
 
-  runApp(MyApp(
-    storageService: storageService,
-    apiService: apiService,
-  ));
+  runApp(MyApp(storageService: storageService, apiService: apiService));
 }
 
 class MyApp extends StatelessWidget {
@@ -39,7 +37,10 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider(apiService, storageService)),
+        Provider<ApiService>.value(value: apiService),
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(apiService, storageService),
+        ),
         ChangeNotifierProvider(create: (_) => DashboardProvider(apiService)),
         ChangeNotifierProvider(create: (_) => AttendanceProvider(apiService)),
         ChangeNotifierProvider(create: (_) => StudentsProvider(apiService)),

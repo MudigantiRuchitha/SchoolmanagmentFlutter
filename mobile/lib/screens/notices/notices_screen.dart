@@ -33,7 +33,9 @@ class _NoticesScreenState extends State<NoticesScreen> {
     try {
       final raw = await _api.getNotices();
       setState(() {
-        _notices = raw.map((n) => SchoolNotice.fromJson(n as Map<String, dynamic>)).toList();
+        _notices = raw
+            .map((n) => SchoolNotice.fromJson(n as Map<String, dynamic>))
+            .toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -76,11 +78,19 @@ class _NoticesScreenState extends State<NoticesScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: targetType,
-                  decoration: const InputDecoration(labelText: 'Target Audience'),
+                  decoration: const InputDecoration(
+                    labelText: 'Target Audience',
+                  ),
                   items: const [
-                    DropdownMenuItem(value: 'all', child: Text('All (School-Wide)')),
+                    DropdownMenuItem(
+                      value: 'all',
+                      child: Text('All (School-Wide)'),
+                    ),
                     DropdownMenuItem(value: 'staff', child: Text('Staff Only')),
-                    DropdownMenuItem(value: 'students', child: Text('Students Only')),
+                    DropdownMenuItem(
+                      value: 'students',
+                      child: Text('Students Only'),
+                    ),
                   ],
                   onChanged: (v) {
                     if (v != null) setDialogState(() => targetType = v);
@@ -98,10 +108,14 @@ class _NoticesScreenState extends State<NoticesScreen> {
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Mark as High Priority / Important', style: TextStyle(fontSize: 13)),
+                  title: const Text(
+                    'Mark as High Priority / Important',
+                    style: TextStyle(fontSize: 13),
+                  ),
                   value: isImportant,
                   activeColor: AppTheme.danger,
-                  onChanged: (v) => setDialogState(() => isImportant = v ?? false),
+                  onChanged: (v) =>
+                      setDialogState(() => isImportant = v ?? false),
                 ),
               ],
             ),
@@ -118,7 +132,9 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
                 if (title.isEmpty || content.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Title and content are required.')),
+                    const SnackBar(
+                      content: Text('Title and content are required.'),
+                    ),
                   );
                   return;
                 }
@@ -134,12 +150,18 @@ class _NoticesScreenState extends State<NoticesScreen> {
                   _loadNotices();
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Notice published successfully!'), backgroundColor: AppTheme.success),
+                    const SnackBar(
+                      content: Text('Notice published successfully!'),
+                      backgroundColor: AppTheme.success,
+                    ),
                   );
                 } catch (e) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to publish: $e'), backgroundColor: AppTheme.danger),
+                    SnackBar(
+                      content: Text('Failed to publish: $e'),
+                      backgroundColor: AppTheme.danger,
+                    ),
                   );
                 }
               },
@@ -154,9 +176,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notices & Circulars'),
-      ),
+      appBar: AppBar(title: const Text('Notices & Circulars')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateNoticeDialog,
         icon: const Icon(Icons.campaign_rounded),
@@ -170,96 +190,144 @@ class _NoticesScreenState extends State<NoticesScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _errorMessage != null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline_rounded, size: 48, color: AppTheme.danger),
-                        const SizedBox(height: 12),
-                        Text(_errorMessage!, style: const TextStyle(color: AppTheme.textSecondary)),
-                        const SizedBox(height: 12),
-                        ElevatedButton(onPressed: _loadNotices, child: const Text('Retry')),
-                      ],
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      size: 48,
+                      color: AppTheme.danger,
                     ),
-                  )
-                : _notices.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.announcement_outlined, size: 52, color: AppTheme.textMuted),
-                            SizedBox(height: 12),
-                            Text('No notices currently published.', style: TextStyle(color: AppTheme.textSecondary)),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 88),
-                        itemCount: _notices.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (ctx, idx) {
-                          final n = _notices[idx];
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 12),
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _loadNotices,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            : _notices.isEmpty
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.announcement_outlined,
+                      size: 52,
+                      color: AppTheme.textMuted,
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'No notices currently published.',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: 88,
+                ),
+                itemCount: _notices.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (ctx, idx) {
+                  final n = _notices[idx];
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  n.title,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              if (n.isImportant)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFEBEE),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    'IMPORTANT',
+                                    style: TextStyle(
+                                      color: AppTheme.danger,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            n.content,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const Divider(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
                                 children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          n.title,
-                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-                                        ),
-                                      ),
-                                      if (n.isImportant)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFFEBEE),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: const Text(
-                                            'IMPORTANT',
-                                            style: TextStyle(color: AppTheme.danger, fontSize: 10, fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                    ],
+                                  const Icon(
+                                    Icons.people_outline_rounded,
+                                    size: 14,
+                                    color: AppTheme.textMuted,
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    n.content,
-                                    style: const TextStyle(fontSize: 13, height: 1.4, color: AppTheme.textSecondary),
-                                  ),
-                                  const Divider(height: 20),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.people_outline_rounded, size: 14, color: AppTheme.textMuted),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Target: ${(n.targetType ?? "all").toUpperCase()}',
-                                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted, fontWeight: FontWeight.w500),
-                                          ),
-                                        ],
-                                      ),
-                                      if (n.createdAt != null)
-                                        Text(
-                                          n.createdAt!.split('T').first,
-                                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                                        ),
-                                    ],
+                                    'Target: ${(n.targetType ?? "all").toUpperCase()}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textMuted,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
+                              if (n.createdAt != null)
+                                Text(
+                                  n.createdAt!.split('T').first,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }

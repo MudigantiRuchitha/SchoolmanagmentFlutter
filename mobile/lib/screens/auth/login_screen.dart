@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
+import '../../config/api_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../main_navigation.dart';
 
@@ -68,7 +70,10 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Server Configuration', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Server Configuration',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
             TextField(
               controller: serverController,
               decoration: const InputDecoration(
-                hintText: 'http://192.168.50.136:5000/api',
+                hintText: ApiConstants.defaultBaseUrl,
                 prefixIcon: Icon(Icons.dns_rounded),
               ),
             ),
@@ -91,16 +96,21 @@ class _LoginScreenState extends State<LoginScreen> {
               runSpacing: 4,
               children: [
                 ActionChip(
-                  label: const Text('Wi-Fi (192.168.50.136)'),
-                  onPressed: () => serverController.text = 'http://192.168.50.136:5000/api',
+                  label: Text(
+                    'Wi-Fi (${Uri.parse(ApiConstants.defaultBaseUrl).host})',
+                  ),
+                  onPressed: () =>
+                      serverController.text = ApiConstants.defaultBaseUrl,
                 ),
                 ActionChip(
                   label: const Text('Localhost (5000)'),
-                  onPressed: () => serverController.text = 'http://localhost:5000/api',
+                  onPressed: () =>
+                      serverController.text = 'http://localhost:5000/api',
                 ),
                 ActionChip(
                   label: const Text('Emulator (10.0.2.2)'),
-                  onPressed: () => serverController.text = 'http://10.0.2.2:5000/api',
+                  onPressed: () =>
+                      serverController.text = 'http://10.0.2.2:5000/api',
                 ),
               ],
             ),
@@ -116,7 +126,9 @@ class _LoginScreenState extends State<LoginScreen> {
               auth.updateBaseUrl(serverController.text);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Server URL updated successfully.')),
+                const SnackBar(
+                  content: Text('Server URL updated successfully.'),
+                ),
               );
             },
             child: const Text('Save'),
@@ -150,7 +162,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: BoxDecoration(
                         color: AppTheme.primaryLight,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2), width: 1.5),
+                        border: Border.all(
+                          color: AppTheme.primary.withValues(alpha: 0.2),
+                          width: 1.5,
+                        ),
                       ),
                       child: const Icon(
                         Icons.school_rounded,
@@ -191,7 +206,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Organization Code
                           const Text(
                             'Organization Code',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           TextFormField(
@@ -199,32 +218,52 @@ class _LoginScreenState extends State<LoginScreen> {
                             textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(
                               hintText: 'e.g. vts',
-                              prefixIcon: Icon(Icons.business_rounded, color: AppTheme.textSecondary, size: 20),
+                              prefixIcon: Icon(
+                                Icons.business_rounded,
+                                color: AppTheme.textSecondary,
+                                size: 20,
+                              ),
                             ),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter organization code' : null,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Enter organization code'
+                                : null,
                           ),
                           const SizedBox(height: 18),
 
                           // Username
                           const Text(
                             'Username or Email',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           TextFormField(
                             controller: _usernameController,
                             decoration: const InputDecoration(
                               hintText: 'e.g. admin or staff ID',
-                              prefixIcon: Icon(Icons.person_outline_rounded, color: AppTheme.textSecondary, size: 20),
+                              prefixIcon: Icon(
+                                Icons.person_outline_rounded,
+                                color: AppTheme.textSecondary,
+                                size: 20,
+                              ),
                             ),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter username or email' : null,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Enter username or email'
+                                : null,
                           ),
                           const SizedBox(height: 18),
 
                           // Password
                           const Text(
                             'Password',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           TextFormField(
@@ -232,17 +271,27 @@ class _LoginScreenState extends State<LoginScreen> {
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               hintText: '••••••••',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.textSecondary, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: AppTheme.textSecondary,
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                  _obscurePassword
+                                      ? Icons.visibility_off_rounded
+                                      : Icons.visibility_rounded,
                                   color: AppTheme.textSecondary,
                                   size: 20,
                                 ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your password' : null,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Enter your password'
+                                : null,
                           ),
                           const SizedBox(height: 14),
 
@@ -255,12 +304,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: Checkbox(
                                   value: _rememberMe,
                                   activeColor: AppTheme.primary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                  onChanged: (v) => setState(() => _rememberMe = v ?? true),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  onChanged: (v) =>
+                                      setState(() => _rememberMe = v ?? true),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              const Text('Remember credentials', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                              const Text(
+                                'Remember credentials',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 22),
@@ -272,7 +330,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
                                   )
                                 : const Text('Sign In to Portal'),
                           ),
@@ -287,10 +348,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   Center(
                     child: TextButton.icon(
                       onPressed: _showServerSettingsDialog,
-                      icon: const Icon(Icons.settings_ethernet_rounded, size: 18, color: AppTheme.textSecondary),
+                      icon: const Icon(
+                        Icons.settings_ethernet_rounded,
+                        size: 18,
+                        color: AppTheme.textSecondary,
+                      ),
                       label: Text(
                         'Server: ${auth.currentBaseUrl}',
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                   ),

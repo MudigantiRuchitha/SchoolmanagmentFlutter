@@ -1,7 +1,8 @@
 class ApiConstants {
   // Default development URL set to the host machine's Wi-Fi IP address.
   // Can be dynamically changed by the user in the app settings/login screen.
-  static const String defaultBaseUrl = 'http://192.168.50.136:5000/api';
+  static const String defaultBaseUrl = 'http://192.168.50.216:5000/api';
+  static const String legacyDefaultBaseUrl = 'http://192.168.50.136:5000/api';
   static const String defaultEmulatorUrl = 'http://10.0.2.2:5000/api';
 
   // 1. Auth endpoints

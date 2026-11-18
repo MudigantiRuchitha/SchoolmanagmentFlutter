@@ -70,7 +70,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 TextField(
                   controller: passCtrl,
                   decoration: InputDecoration(
-                    labelText: isEdit ? 'New Password (leave empty to keep)' : 'Password *',
+                    labelText: isEdit
+                        ? 'New Password (leave empty to keep)'
+                        : 'Password *',
                   ),
                   obscureText: true,
                 ),
@@ -91,8 +93,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   decoration: const InputDecoration(labelText: 'Role'),
                   items: const [
                     DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                    DropdownMenuItem(value: 'principal', child: Text('Principal')),
-                    DropdownMenuItem(value: 'management', child: Text('Management')),
+                    DropdownMenuItem(
+                      value: 'principal',
+                      child: Text('Principal'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'management',
+                      child: Text('Management'),
+                    ),
                   ],
                   onChanged: (v) {
                     if (v != null) setDlgState(() => role = v);
@@ -113,7 +121,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
             ElevatedButton(
               onPressed: () async {
                 final u = userCtrl.text.trim();
@@ -122,7 +133,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
                 if (u.isEmpty || n.isEmpty || (!isEdit && p.isEmpty)) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please fill all required fields')),
+                    const SnackBar(
+                      content: Text('Please fill all required fields'),
+                    ),
                   );
                   return;
                 }
@@ -146,11 +159,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   _loadAdmins();
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Admin account saved successfully!'), backgroundColor: AppTheme.success),
+                    const SnackBar(
+                      content: Text('Admin account saved successfully!'),
+                      backgroundColor: AppTheme.success,
+                    ),
                   );
                 } catch (e) {
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               },
               child: Text(isEdit ? 'Update' : 'Create'),
@@ -166,9 +183,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Admin?'),
-        content: Text('Revoke administrator access for "${admin['username']}"?'),
+        content: Text(
+          'Revoke administrator access for "${admin['username']}"?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.pop(ctx, true),
@@ -184,7 +206,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         _loadAdmins();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
     }
   }
@@ -192,9 +215,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Users & Privileges'),
-      ),
+      appBar: AppBar(title: const Text('Admin Users & Privileges')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAdminDialog(),
         icon: const Icon(Icons.admin_panel_settings_rounded),
@@ -206,49 +227,85 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _errorMessage != null
-                ? Center(child: Text(_errorMessage!, style: const TextStyle(color: AppTheme.danger)))
-                : _admins.isEmpty
-                    ? const Center(child: Text('No admin users found.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 84),
-                        itemCount: _admins.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, idx) {
-                          final a = _admins[idx];
-                          return Card(
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              leading: const CircleAvatar(
-                                backgroundColor: AppTheme.primaryLight,
-                                child: Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary),
-                              ),
-                              title: Text(a['full_name'] ?? a['username'] ?? 'Admin', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 2),
-                                  Text('@${a['username']} • Role: ${(a['role'] ?? "admin").toUpperCase()}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                                  if (a['email'] != null && a['email'].toString().isNotEmpty)
-                                    Text(a['email'], style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 18),
-                                    onPressed: () => _showAdminDialog(a),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
-                                    onPressed: () => _deleteAdmin(a),
-                                  ),
-                                ],
+            ? Center(
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: AppTheme.danger),
+                ),
+              )
+            : _admins.isEmpty
+            ? const Center(child: Text('No admin users found.'))
+            : ListView.separated(
+                padding: const EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  top: 14,
+                  bottom: 84,
+                ),
+                itemCount: _admins.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (ctx, idx) {
+                  final a = _admins[idx];
+                  return Card(
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      leading: const CircleAvatar(
+                        backgroundColor: AppTheme.primaryLight,
+                        child: Icon(
+                          Icons.admin_panel_settings_rounded,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                      title: Text(
+                        a['full_name'] ?? a['username'] ?? 'Admin',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 2),
+                          Text(
+                            '@${a['username']} • Role: ${(a['role'] ?? "admin").toUpperCase()}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          if (a['email'] != null &&
+                              a['email'].toString().isNotEmpty)
+                            Text(
+                              a['email'],
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textMuted,
                               ),
                             ),
-                          );
-                        },
+                        ],
                       ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            onPressed: () => _showAdminDialog(a),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: AppTheme.danger,
+                            ),
+                            onPressed: () => _deleteAdmin(a),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }

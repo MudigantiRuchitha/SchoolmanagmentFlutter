@@ -46,8 +46,13 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
   void _showHolidayDialog([Map<String, dynamic>? holiday]) {
     final isEdit = holiday != null;
     final titleCtrl = TextEditingController(text: holiday?['title'] ?? '');
-    final startCtrl = TextEditingController(text: holiday?['start_date'] ?? DateTime.now().toString().split(' ').first);
-    final endCtrl = TextEditingController(text: holiday?['end_date'] ?? DateTime.now().toString().split(' ').first);
+    final startCtrl = TextEditingController(
+      text:
+          holiday?['start_date'] ?? DateTime.now().toString().split(' ').first,
+    );
+    final endCtrl = TextEditingController(
+      text: holiday?['end_date'] ?? DateTime.now().toString().split(' ').first,
+    );
     final descCtrl = TextEditingController(text: holiday?['description'] ?? '');
 
     showDialog(
@@ -59,7 +64,10 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
           children: [
             TextField(
               controller: titleCtrl,
-              decoration: const InputDecoration(labelText: 'Holiday Title *', hintText: 'e.g. Diwali Holiday'),
+              decoration: const InputDecoration(
+                labelText: 'Holiday Title *',
+                hintText: 'e.g. Diwali Holiday',
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -67,14 +75,18 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
                 Expanded(
                   child: TextField(
                     controller: startCtrl,
-                    decoration: const InputDecoration(labelText: 'Start Date (YYYY-MM-DD)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Start Date (YYYY-MM-DD)',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: endCtrl,
-                    decoration: const InputDecoration(labelText: 'End Date (YYYY-MM-DD)'),
+                    decoration: const InputDecoration(
+                      labelText: 'End Date (YYYY-MM-DD)',
+                    ),
                   ),
                 ),
               ],
@@ -82,13 +94,19 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: descCtrl,
-              decoration: const InputDecoration(labelText: 'Description', hintText: 'Optional notes'),
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Optional notes',
+              ),
               maxLines: 2,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final title = titleCtrl.text.trim();
@@ -128,7 +146,10 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
         title: const Text('Delete Holiday?'),
         content: Text('Remove holiday "${holiday['title']}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.pop(ctx, true),
@@ -144,7 +165,8 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
         _loadHolidays();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
     }
   }
@@ -152,9 +174,7 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Holidays Calendar'),
-      ),
+      appBar: AppBar(title: const Text('Holidays Calendar')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showHolidayDialog(),
         icon: const Icon(Icons.beach_access_rounded),
@@ -166,55 +186,86 @@ class _HolidaysScreenState extends State<HolidaysScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _errorMessage != null
-                ? Center(child: Text(_errorMessage!, style: const TextStyle(color: AppTheme.danger)))
-                : _holidays.isEmpty
-                    ? const Center(child: Text('No holidays scheduled.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 84),
-                        itemCount: _holidays.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, idx) {
-                          final h = _holidays[idx];
-                          return Card(
-                            child: ListTile(
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.warningLight,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.beach_access_rounded, color: AppTheme.warning),
-                              ),
-                              title: Text(h['title'] ?? 'Holiday', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${h['start_date']} → ${h['end_date'] ?? h['start_date']}',
-                                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
-                                  ),
-                                  if (h['description'] != null && h['description'].toString().isNotEmpty)
-                                    Text(h['description'], style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 18),
-                                    onPressed: () => _showHolidayDialog(h),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
-                                    onPressed: () => _deleteHoliday(h),
-                                  ),
-                                ],
+            ? Center(
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: AppTheme.danger),
+                ),
+              )
+            : _holidays.isEmpty
+            ? const Center(child: Text('No holidays scheduled.'))
+            : ListView.separated(
+                padding: const EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  top: 14,
+                  bottom: 84,
+                ),
+                itemCount: _holidays.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (ctx, idx) {
+                  final h = _holidays[idx];
+                  return Card(
+                    child: ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warningLight,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.beach_access_rounded,
+                          color: AppTheme.warning,
+                        ),
+                      ),
+                      title: Text(
+                        h['title'] ?? 'Holiday',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 2),
+                          Text(
+                            '${h['start_date']} → ${h['end_date'] ?? h['start_date']}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (h['description'] != null &&
+                              h['description'].toString().isNotEmpty)
+                            Text(
+                              h['description'],
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textMuted,
                               ),
                             ),
-                          );
-                        },
+                        ],
                       ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            onPressed: () => _showHolidayDialog(h),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: AppTheme.danger,
+                            ),
+                            onPressed: () => _deleteHoliday(h),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }

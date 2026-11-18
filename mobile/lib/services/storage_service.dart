@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../config/api_constants.dart';
 import '../models/user_model.dart';
 
@@ -57,7 +59,11 @@ class StorageService {
   // Base URL
   String getBaseUrl() {
     final val = _prefs.getString(_keyBaseUrl);
-    if (val == null || val.contains('localhost') || val.contains('10.0.2.2')) {
+    if (val == null ||
+        val.replaceFirst(RegExp(r'/+$'), '') ==
+            ApiConstants.legacyDefaultBaseUrl ||
+        val.contains('localhost') ||
+        val.contains('10.0.2.2')) {
       return ApiConstants.defaultBaseUrl;
     }
     return val;
@@ -76,4 +82,3 @@ class StorageService {
     await _prefs.remove(_keyOrg);
   }
 }
-

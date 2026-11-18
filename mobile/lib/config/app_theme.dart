@@ -3,9 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand Colors matching the ACS School Management Web App
-  static const Color primary = Color(0xFF2563EB); // Royal Blue
-  static const Color primaryDark = Color(0xFF1D4ED8);
-  static const Color primaryLight = Color(0xFFEFF6FF);
+  static const Color primary = Color(0xFF4F46E5);
+  static const Color primaryDark = Color(0xFF4338CA);
+  static const Color primaryLight = Color(0xFFEEF2FF);
 
   static const Color secondary = Color(0xFF7C3AED); // Purple
   static const Color secondaryLight = Color(0xFFF5F3FF);
@@ -22,7 +22,7 @@ class AppTheme {
   static const Color purpleBadge = Color(0xFF9333EA);
   static const Color purpleBadgeLight = Color(0xFFFAF5FF);
 
-  static const Color background = Color(0xFFF8FAFC); // Slate 50
+  static const Color background = Color(0xFFF1F5F9);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color cardBg = Color(0xFFFFFFFF);
   static const Color border = Color(0xFFE2E8F0);
@@ -72,7 +72,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: border, width: 1.2),
@@ -113,8 +116,14 @@ class AppTheme {
         unselectedItemColor: textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
-        selectedLabelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+        selectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+        unselectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
       ),
       textTheme: baseText.copyWith(
         titleLarge: baseText.titleLarge?.copyWith(
