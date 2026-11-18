@@ -5,7 +5,7 @@ import '../services/api_service.dart';
 class StaffProvider extends ChangeNotifier {
   final ApiService _api;
 
-  List<StaffMember> _staff = [];
+  List<StaffMember> _allStaff = [];
   String _searchQuery = '';
   String? _selectedRoleType;
   int? _selectedBranchId;
@@ -14,12 +14,39 @@ class StaffProvider extends ChangeNotifier {
 
   StaffProvider(this._api);
 
-  List<StaffMember> get staff => _staff;
+  List<StaffMember> get staff {
+    if (_selectedRoleType == null || _selectedRoleType!.isEmpty) {
+      return _allStaff;
+    }
+    final target = _selectedRoleType!.toLowerCase().trim();
+    return _allStaff.where((member) {
+      final role = member.roleType.toLowerCase().trim();
+      if (target == 'non-teaching' || target == 'non_teaching') {
+        return role == 'non-teaching' || role == 'non_teaching';
+      }
+      return role == target;
+    }).toList();
+  }
+
+  List<StaffMember> get allStaff => _allStaff;
   String get searchQuery => _searchQuery;
   String? get selectedRoleType => _selectedRoleType;
   int? get selectedBranchId => _selectedBranchId;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  int get totalCount => _allStaff.length;
+
+  int get teachingCount =>
+      _allStaff.where((s) => s.roleType.toLowerCase().trim() == 'teaching').length;
+
+  int get nonTeachingCount => _allStaff.where((s) {
+        final r = s.roleType.toLowerCase().trim();
+        return r == 'non-teaching' || r == 'non_teaching';
+      }).length;
+
+  int get managementCount =>
+      _allStaff.where((s) => s.roleType.toLowerCase().trim() == 'management').length;
 
   void setSearch(String query) {
     _searchQuery = query;
@@ -27,8 +54,12 @@ class StaffProvider extends ChangeNotifier {
   }
 
   void setRoleType(String? role) {
-    _selectedRoleType = role;
-    fetchStaff();
+    if (role == null || role.isEmpty || role.toLowerCase() == 'all') {
+      _selectedRoleType = null;
+    } else {
+      _selectedRoleType = role.toLowerCase().trim();
+    }
+    notifyListeners();
   }
 
   void setBranch(int? branchId) {
@@ -44,10 +75,11 @@ class StaffProvider extends ChangeNotifier {
     try {
       final res = await _api.getStaff(
         search: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
-        roleType: _selectedRoleType,
         branchId: _selectedBranchId,
       );
-      _staff = res.map((s) => StaffMember.fromJson(s as Map<String, dynamic>)).toList();
+      _allStaff = res
+          .map((s) => StaffMember.fromJson(s as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -56,4 +88,3 @@ class StaffProvider extends ChangeNotifier {
     }
   }
 }
-

@@ -64,6 +64,8 @@ class AdminMetricCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final Color backgroundColor;
+  final VoidCallback? onTap;
+  final bool isSelected;
 
   const AdminMetricCard({
     super.key,
@@ -72,52 +74,67 @@ class AdminMetricCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.backgroundColor,
+    this.onTap,
+    this.isSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                borderRadius: BorderRadius.circular(10),
+      elevation: isSelected ? 2 : 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected ? color : const Color(0xFFE2E8F0),
+          width: isSelected ? 1.8 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 20, color: color),
               ),
-              child: Icon(icon, size: 20, color: color),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isSelected ? color : AppTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

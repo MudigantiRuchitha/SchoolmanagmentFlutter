@@ -178,7 +178,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: Icons.groups_rounded,
         color: const Color(0xFF10B981),
         bgColor: const Color(0xFFECFDF5),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const StaffScreen(initialRole: 'teaching'),
+          ),
+        ),
       ),
       _StatData(
         label: 'Non-Teaching',
@@ -186,7 +191,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: Icons.person_rounded,
         color: const Color(0xFFF59E0B),
         bgColor: const Color(0xFFFFFBEB),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const StaffScreen(initialRole: 'non-teaching'),
+          ),
+        ),
       ),
       _StatData(
         label: 'Management',
@@ -194,7 +204,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: Icons.admin_panel_settings_rounded,
         color: const Color(0xFF8B5CF6),
         bgColor: const Color(0xFFF5F3FF),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const StaffScreen(initialRole: 'management'),
+          ),
+        ),
       ),
       _StatData(
         label: 'Total Staff',
@@ -202,7 +217,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: Icons.people_alt_rounded,
         color: const Color(0xFFEA580C),
         bgColor: const Color(0xFFFFF7ED),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const StaffScreen(initialRole: null),
+          ),
+        ),
       ),
       _StatData(
         label: 'Admin Users',

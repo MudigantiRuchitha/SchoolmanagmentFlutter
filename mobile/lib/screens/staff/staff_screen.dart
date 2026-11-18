@@ -11,7 +11,8 @@ import '../../widgets/admin_ui.dart';
 import '../../widgets/custom_app_bar.dart';
 
 class StaffScreen extends StatefulWidget {
-  const StaffScreen({super.key});
+  final String? initialRole;
+  const StaffScreen({super.key, this.initialRole});
 
   @override
   State<StaffScreen> createState() => _StaffScreenState();
@@ -27,9 +28,30 @@ class _StaffScreenState extends State<StaffScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<StaffProvider>().fetchStaff();
+      final staffProv = context.read<StaffProvider>();
+      if (widget.initialRole != null) {
+        staffProv.setRoleType(widget.initialRole);
+      } else {
+        staffProv.setRoleType(null);
+      }
+      staffProv.fetchStaff();
       _loadBranches();
     });
+  }
+
+  String _getHeaderTitle(String? role) {
+    if (role == null) return 'Staff';
+    switch (role.toLowerCase()) {
+      case 'teaching':
+        return 'Teaching Staff';
+      case 'non-teaching':
+      case 'non_teaching':
+        return 'Non-Teaching Staff';
+      case 'management':
+        return 'Management Staff';
+      default:
+        return 'Staff';
+    }
   }
 
   Future<void> _loadBranches() async {
@@ -269,8 +291,8 @@ class _StaffScreenState extends State<StaffScreen> {
         color: AppTheme.primary,
         child: Column(
           children: [
-            const AdminPageHeading(
-              title: 'Staff',
+            AdminPageHeading(
+              title: _getHeaderTitle(staffProv.selectedRoleType),
               subtitle: 'Manage teaching, non-teaching, and management staff.',
             ),
             // Search & Category Filters
@@ -419,10 +441,12 @@ class _StaffScreenState extends State<StaffScreen> {
                     width: 158,
                     child: AdminMetricCard(
                       label: 'Total Staff',
-                      value: '${staffList.length}',
+                      value: '${staffProv.totalCount}',
                       icon: Icons.groups_rounded,
                       color: AppTheme.primary,
                       backgroundColor: AppTheme.primaryLight,
+                      isSelected: staffProv.selectedRoleType == null,
+                      onTap: () => staffProv.setRoleType(null),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -430,11 +454,12 @@ class _StaffScreenState extends State<StaffScreen> {
                     width: 158,
                     child: AdminMetricCard(
                       label: 'Teaching',
-                      value:
-                          '${staffList.where((s) => s.roleType == 'teaching').length}',
+                      value: '${staffProv.teachingCount}',
                       icon: Icons.menu_book_rounded,
                       color: AppTheme.success,
                       backgroundColor: AppTheme.successLight,
+                      isSelected: staffProv.selectedRoleType == 'teaching',
+                      onTap: () => staffProv.setRoleType('teaching'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -442,11 +467,12 @@ class _StaffScreenState extends State<StaffScreen> {
                     width: 158,
                     child: AdminMetricCard(
                       label: 'Non-Teaching',
-                      value:
-                          '${staffList.where((s) => s.roleType == 'non-teaching' || s.roleType == 'non_teaching').length}',
+                      value: '${staffProv.nonTeachingCount}',
                       icon: Icons.support_agent_rounded,
                       color: AppTheme.warning,
                       backgroundColor: AppTheme.warningLight,
+                      isSelected: staffProv.selectedRoleType == 'non-teaching',
+                      onTap: () => staffProv.setRoleType('non-teaching'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -454,11 +480,12 @@ class _StaffScreenState extends State<StaffScreen> {
                     width: 158,
                     child: AdminMetricCard(
                       label: 'Management',
-                      value:
-                          '${staffList.where((s) => s.roleType == 'management').length}',
+                      value: '${staffProv.managementCount}',
                       icon: Icons.admin_panel_settings_rounded,
                       color: AppTheme.secondary,
                       backgroundColor: AppTheme.secondaryLight,
+                      isSelected: staffProv.selectedRoleType == 'management',
+                      onTap: () => staffProv.setRoleType('management'),
                     ),
                   ),
                 ],
