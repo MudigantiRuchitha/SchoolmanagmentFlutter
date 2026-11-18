@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
 import '../../services/storage_service.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 
 class BranchGroupsScreen extends StatefulWidget {
   const BranchGroupsScreen({super.key});
@@ -130,9 +132,8 @@ class _BranchGroupsScreenState extends State<BranchGroupsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Branch Groups'),
-      ),
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: const CustomAppBar(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showGroupDialog(),
         icon: const Icon(Icons.workspaces_rounded),
@@ -141,47 +142,52 @@ class _BranchGroupsScreenState extends State<BranchGroupsScreen> {
       body: RefreshIndicator(
         onRefresh: _loadGroups,
         color: AppTheme.primary,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _errorMessage != null
-                ? Center(child: Text(_errorMessage!, style: const TextStyle(color: AppTheme.danger)))
-                : _groups.isEmpty
-                    ? const Center(child: Text('No branch groups created.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(14),
-                        itemCount: _groups.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, idx) {
-                          final g = _groups[idx];
-                          return Card(
-                            child: ListTile(
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryLight,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.workspaces_rounded, color: AppTheme.primary),
-                              ),
-                              title: Text(g['name'] ?? 'Group', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text(g['description'] ?? 'No description provided'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 18),
-                                    onPressed: () => _showGroupDialog(g),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
-                                    onPressed: () => _deleteGroup(g),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const PageHeaderTitle(
+              title: 'Branch Groups',
+              subtitle: 'Manage geographical campus clusters and administrative zones',
+            ),
+            if (_isLoading)
+              const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+            else if (_errorMessage != null)
+              Center(child: Padding(padding: const EdgeInsets.all(40), child: Text(_errorMessage!, style: const TextStyle(color: AppTheme.danger))))
+            else if (_groups.isEmpty)
+              const Center(child: Padding(padding: EdgeInsets.all(40), child: Text('No branch groups created.')))
+            else
+              ..._groups.map((g) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryLight,
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: const Icon(Icons.workspaces_rounded, color: AppTheme.primary),
+                    ),
+                    title: Text(g['name'] ?? 'Group', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(g['description'] ?? 'No description provided'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          onPressed: () => _showGroupDialog(g),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
+                          onPressed: () => _deleteGroup(g),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

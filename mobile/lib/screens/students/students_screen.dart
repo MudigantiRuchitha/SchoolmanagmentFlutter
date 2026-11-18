@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../providers/students_provider.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 import 'student_detail_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
@@ -35,12 +37,23 @@ class _StudentsScreenState extends State<StudentsScreen> {
     final stuProv = context.watch<StudentsProvider>();
     final students = stuProv.students;
 
-    return RefreshIndicator(
-      onRefresh: () => stuProv.fetchStudents(),
-      color: AppTheme.primary,
-      child: Column(
-        children: [
-          // Search & Filter Toolbar
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
+      body: RefreshIndicator(
+        onRefresh: () => stuProv.fetchStudents(),
+        color: AppTheme.primary,
+        child: Column(
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 14),
+              child: const PageHeaderTitle(
+                title: 'Students',
+                subtitle: 'Manage student enrollment, profiles, and class allocations',
+              ),
+            ),
+            // Search & Filter Toolbar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: AppTheme.surface,
@@ -68,24 +81,32 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<int?>(
-                        initialValue: stuProv.selectedClassId,
-                        decoration: const InputDecoration(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          prefixIcon: Icon(Icons.meeting_room_rounded, size: 18),
-                        ),
-                        hint: const Text('Filter by Class', style: TextStyle(fontSize: 13)),
-                        isExpanded: true,
-                        items: [
+                      child: Builder(builder: (context) {
+                        final classItems = <DropdownMenuItem<int?>>[
                           const DropdownMenuItem(value: null, child: Text('All Classes', style: TextStyle(fontSize: 13))),
-                          ...stuProv.classes.map((c) {
-                            final id = c['id'] is int ? c['id'] : int.tryParse(c['id'].toString());
+                        ];
+                        final seenC = <int?>{null};
+                        for (final c in stuProv.classes) {
+                          final id = c['id'] is int ? c['id'] : int.tryParse(c['id']?.toString() ?? '');
+                          if (id != null && seenC.add(id)) {
                             final name = '${c['name'] ?? ''} ${c['section'] ?? ''}'.trim();
-                            return DropdownMenuItem(value: id, child: Text(name, style: const TextStyle(fontSize: 13)));
-                          }),
-                        ],
-                        onChanged: (val) => stuProv.setClassFilter(val),
-                      ),
+                            classItems.add(DropdownMenuItem(value: id, child: Text(name.isEmpty ? 'Class #$id' : name, style: const TextStyle(fontSize: 13))));
+                          }
+                        }
+                        final safeClassId = classItems.any((i) => i.value == stuProv.selectedClassId) ? stuProv.selectedClassId : null;
+
+                        return DropdownButtonFormField<int?>(
+                          value: safeClassId,
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            prefixIcon: Icon(Icons.meeting_room_rounded, size: 18),
+                          ),
+                          hint: const Text('Filter by Class', style: TextStyle(fontSize: 13)),
+                          isExpanded: true,
+                          items: classItems,
+                          onChanged: (val) => stuProv.setClassFilter(val),
+                        );
+                      }),
                     ),
                   ],
                 ),
@@ -174,6 +195,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

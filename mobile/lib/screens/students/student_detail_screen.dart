@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../config/app_theme.dart';
 import '../../models/student_model.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 
 class StudentDetailScreen extends StatelessWidget {
   final Student student;
@@ -24,14 +26,16 @@ class StudentDetailScreen extends StatelessWidget {
     final hasFace = student.hasFaceRegistered == true;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Student Profile'),
-      ),
+      appBar: const CustomAppBar(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            PageHeaderTitle(
+              title: 'Student Profile',
+              subtitle: 'Admission #${student.admissionNo ?? student.id} • ${student.fullName}',
+            ),
             // Profile Card
             Card(
               child: Padding(

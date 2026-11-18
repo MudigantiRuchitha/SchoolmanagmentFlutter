@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/staff_model.dart';
 import '../../providers/staff_provider.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 
 class StaffScreen extends StatefulWidget {
   const StaffScreen({super.key});
@@ -165,11 +167,21 @@ class _StaffScreenState extends State<StaffScreen> {
     final staffList = staffProv.staff;
 
     return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
       body: RefreshIndicator(
         onRefresh: () => staffProv.fetchStaff(),
         color: AppTheme.primary,
         child: Column(
           children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 14),
+              child: const PageHeaderTitle(
+                title: 'Staff Directory',
+                subtitle: 'Manage teaching, non-teaching, and administrative staff members',
+              ),
+            ),
             // Search & Category Filters
             Container(
               padding: const EdgeInsets.all(14),

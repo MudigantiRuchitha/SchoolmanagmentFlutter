@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 import '../branches/branches_screen.dart';
 import '../admins/admin_users_screen.dart';
 import '../classes/classes_screen.dart';
@@ -85,212 +87,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final todayFormatted = DateFormat('EEEE, MMMM d yyyy').format(DateTime.now());
 
-    return RefreshIndicator(
-      onRefresh: () => dash.fetchDashboardData(),
-      color: const Color(0xFF4F46E5),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 980;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
+      body: RefreshIndicator(
+        onRefresh: () => dash.fetchDashboardData(),
+        color: const Color(0xFF4F46E5),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 980;
 
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            children: [
-              // =========================================================
-              // 1. TOP HEADER (Dashboard Title, Date, Bell, User Chip)
-              // =========================================================
-              _buildTopHeader(user, todayFormatted, dash),
-              const SizedBox(height: 18),
-
-              // =========================================================
-              // 2. 8 STATS KPI CARDS
-              // =========================================================
-              _buildStatsGrid(stats, constraints.maxWidth),
-              const SizedBox(height: 20),
-
-              // =========================================================
-              // 3. MAIN CONTENT: ATTENDANCE & SIDE SUMMARY
-              // =========================================================
-              if (isWide)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left Column (Attendance Card)
-                    Expanded(
-                      flex: 68,
-                      child: _buildAttendanceCard(dash),
-                    ),
-                    const SizedBox(width: 18),
-                    // Right Column (Attendance Summary + Recent Notices)
-                    Expanded(
-                      flex: 32,
-                      child: Column(
-                        children: [
-                          _buildAttendanceSummaryCard(dash),
-                          const SizedBox(height: 18),
-                          _buildRecentNoticesCard(dash),
-                        ],
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Column(
-                  children: [
-                    _buildAttendanceCard(dash),
-                    const SizedBox(height: 18),
-                    _buildAttendanceSummaryCard(dash),
-                    const SizedBox(height: 18),
-                    _buildRecentNoticesCard(dash),
-                  ],
+            return ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              children: [
+                // =========================================================
+                // 1. PAGE TITLE & SUBTITLE
+                // =========================================================
+                PageHeaderTitle(
+                  title: 'Dashboard',
+                  subtitle: 'Today: $todayFormatted',
                 ),
-              const SizedBox(height: 24),
-            ],
-          );
-        },
+
+                // =========================================================
+                // 2. 8 STATS KPI CARDS
+                // =========================================================
+                _buildStatsGrid(stats, constraints.maxWidth),
+                const SizedBox(height: 20),
+
+                // =========================================================
+                // 3. MAIN CONTENT: ATTENDANCE & SIDE SUMMARY
+                // =========================================================
+                if (isWide)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left Column (Attendance Card)
+                      Expanded(
+                        flex: 68,
+                        child: _buildAttendanceCard(dash),
+                      ),
+                      const SizedBox(width: 18),
+                      // Right Column (Attendance Summary + Recent Notices)
+                      Expanded(
+                        flex: 32,
+                        child: Column(
+                          children: [
+                            _buildAttendanceSummaryCard(dash),
+                            const SizedBox(height: 18),
+                            _buildRecentNoticesCard(dash),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Column(
+                    children: [
+                      _buildAttendanceCard(dash),
+                      const SizedBox(height: 18),
+                      _buildAttendanceSummaryCard(dash),
+                      const SizedBox(height: 18),
+                      _buildRecentNoticesCard(dash),
+                    ],
+                  ),
+                const SizedBox(height: 24),
+              ],
+            );
+          },
+        ),
       ),
-    );
-  }
-
-  // =========================================================================
-  // TOP HEADER
-  // =========================================================================
-  Widget _buildTopHeader(dynamic user, String todayFormatted, DashboardProvider dash) {
-    final rawName = user?.name ?? 'Admin';
-    final nameInitials = rawName.trim().isNotEmpty
-        ? rawName.trim().split(' ').map((p) => p.isNotEmpty ? p[0].toUpperCase() : '').take(2).join()
-        : 'AC';
-
-    final noticeCount = dash.recentNotices.length;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Dashboard',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-                letterSpacing: -0.4,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Today: $todayFormatted',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF64748B),
-              ),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            // Notification Bell with Badge
-            InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NoticesScreen()),
-                );
-              },
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(Icons.notifications_outlined, size: 20, color: Color(0xFF1E293B)),
-                    if (noticeCount > 0)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                          child: Text(
-                            '$noticeCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-
-            // User Avatar Chip
-            InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
-              },
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        nameInitials.isNotEmpty ? nameInitials : 'AC',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      rawName.toLowerCase(),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -691,9 +556,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     // Branch Dropdown
                     Builder(builder: (context) {
-                      final branchExists = dash.selectedBranchId == null ||
-                          dash.branches.any((b) => b['id']?.toString() == dash.selectedBranchId);
-                      final currentBranch = branchExists ? dash.selectedBranchId : null;
+                      final branchItems = <DropdownMenuItem<String?>>[
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All Branches'),
+                        ),
+                      ];
+                      final seenBranch = <String?>{null};
+                      for (final b in dash.branches) {
+                        final bId = b['id']?.toString().trim();
+                        if (bId != null && bId.isNotEmpty && seenBranch.add(bId)) {
+                          branchItems.add(
+                            DropdownMenuItem<String?>(
+                              value: bId,
+                              child: Text(b['name'] ?? 'Branch'),
+                            ),
+                          );
+                        }
+                      }
+                      final safeBranch = branchItems.any((i) => i.value == dash.selectedBranchId) ? dash.selectedBranchId : null;
 
                       return Container(
                         height: 36,
@@ -705,22 +586,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String?>(
-                            value: currentBranch,
+                            value: safeBranch,
                             hint: const Text('All Branches', style: TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
                             style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
                             icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('All Branches'),
-                              ),
-                              ...dash.branches.map((b) {
-                                return DropdownMenuItem<String?>(
-                                  value: b['id']?.toString(),
-                                  child: Text(b['name'] ?? 'Branch'),
-                                );
-                              }),
-                            ],
+                            items: branchItems,
                             onChanged: (val) => dash.setSelectedBranch(val),
                           ),
                         ),
@@ -730,9 +600,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     // Class Dropdown (if student mode and classes available)
                     if (dash.attType == 'student' && dash.classes.isNotEmpty)
                       Builder(builder: (context) {
-                        final classExists = dash.selectedClassId == null ||
-                            dash.classes.any((c) => c['id']?.toString() == dash.selectedClassId);
-                        final currentClass = classExists ? dash.selectedClassId : null;
+                        final classItems = <DropdownMenuItem<String?>>[
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All Classes'),
+                          ),
+                        ];
+                        final seenClass = <String?>{null};
+                        for (final c in dash.classes) {
+                          final cId = c['id']?.toString().trim();
+                          if (cId != null && cId.isNotEmpty && seenClass.add(cId)) {
+                            final name = "${c['name'] ?? ''} ${c['section'] ?? ''}".trim();
+                            classItems.add(
+                              DropdownMenuItem<String?>(
+                                value: cId,
+                                child: Text(name.isNotEmpty ? name : 'Class'),
+                              ),
+                            );
+                          }
+                        }
+                        final safeClass = classItems.any((i) => i.value == dash.selectedClassId) ? dash.selectedClassId : null;
 
                         return Container(
                           height: 36,
@@ -744,23 +631,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String?>(
-                              value: currentClass,
+                              value: safeClass,
                               hint: const Text('All Classes', style: TextStyle(fontSize: 12, color: Color(0xFF1E293B))),
                               style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
                               icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text('All Classes'),
-                                ),
-                                ...dash.classes.map((c) {
-                                  final name = "${c['name'] ?? ''} ${c['section'] ?? ''}".trim();
-                                  return DropdownMenuItem<String?>(
-                                    value: c['id']?.toString(),
-                                    child: Text(name.isNotEmpty ? name : 'Class'),
-                                  );
-                                }),
-                              ],
+                              items: classItems,
                               onChanged: (val) => dash.setSelectedClass(val),
                             ),
                           ),

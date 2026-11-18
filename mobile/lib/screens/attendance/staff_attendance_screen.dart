@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/attendance_model.dart';
 import '../../providers/attendance_provider.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 
 class StaffAttendanceScreen extends StatefulWidget {
   const StaffAttendanceScreen({super.key});
@@ -133,7 +135,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
     final records = att.staffRecords;
     final summary = att.staffSummary;
 
-    return RefreshIndicator(
+    final content = RefreshIndicator(
       onRefresh: () => att.fetchStaffAttendance(),
       color: AppTheme.primary,
       child: Column(
@@ -145,22 +147,27 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<String?>(
-                    initialValue: att.selectedRoleType,
-                    decoration: const InputDecoration(
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      prefixIcon: Icon(Icons.filter_list_rounded, size: 18),
-                    ),
-                    hint: const Text('All Roles (Teaching & Non-Teaching)', style: TextStyle(fontSize: 13)),
-                    isExpanded: true,
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('All Staff Roles', style: TextStyle(fontSize: 13))),
-                      DropdownMenuItem(value: 'teaching', child: Text('Teaching Staff', style: TextStyle(fontSize: 13))),
-                      DropdownMenuItem(value: 'non-teaching', child: Text('Non-Teaching Staff', style: TextStyle(fontSize: 13))),
-                      DropdownMenuItem(value: 'management', child: Text('Management', style: TextStyle(fontSize: 13))),
-                    ],
-                    onChanged: (val) => att.setRoleFilter(val),
-                  ),
+                  child: Builder(builder: (context) {
+                    const roleItems = [
+                      DropdownMenuItem<String?>(value: null, child: Text('All Staff Roles', style: TextStyle(fontSize: 13))),
+                      DropdownMenuItem<String?>(value: 'teaching', child: Text('Teaching Staff', style: TextStyle(fontSize: 13))),
+                      DropdownMenuItem<String?>(value: 'non-teaching', child: Text('Non-Teaching Staff', style: TextStyle(fontSize: 13))),
+                      DropdownMenuItem<String?>(value: 'management', child: Text('Management', style: TextStyle(fontSize: 13))),
+                    ];
+                    final safeRole = roleItems.any((i) => i.value == att.selectedRoleType) ? att.selectedRoleType : null;
+
+                    return DropdownButtonFormField<String?>(
+                      value: safeRole,
+                      decoration: const InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        prefixIcon: Icon(Icons.filter_list_rounded, size: 18),
+                      ),
+                      hint: const Text('All Roles (Teaching & Non-Teaching)', style: TextStyle(fontSize: 13)),
+                      isExpanded: true,
+                      items: roleItems,
+                      onChanged: (val) => att.setRoleFilter(val),
+                    );
+                  }),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton.icon(
@@ -356,6 +363,28 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
         ],
       ),
     );
+
+    if (Navigator.canPop(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: const CustomAppBar(),
+        body: Column(
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 14),
+              child: const PageHeaderTitle(
+                title: 'Staff Attendance',
+                subtitle: 'Biometric punch logs and daily attendance for school personnel',
+              ),
+            ),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
+    return content;
   }
 
   Widget _buildStaffStatusBtn(String label, bool isSelected, Color color, VoidCallback onTap) {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 import 'student_attendance_screen.dart';
 import 'staff_attendance_screen.dart';
 import 'face_scanner_screen.dart';
@@ -30,49 +32,61 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(48),
-        child: Container(
-          color: AppTheme.surface,
-          child: TabBar(
-            controller: _tabController,
-            indicatorColor: AppTheme.primary,
-            indicatorWeight: 3,
-            labelColor: AppTheme.primary,
-            unselectedLabelColor: AppTheme.textSecondary,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            tabs: const [
-              Tab(
-                iconMargin: EdgeInsets.zero,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.school_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Student Attendance'),
-                  ],
-                ),
-              ),
-              Tab(
-                iconMargin: EdgeInsets.zero,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.badge_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Staff Attendance'),
-                  ],
-                ),
-              ),
-            ],
+      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
+      body: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 14),
+            child: const PageHeaderTitle(
+              title: 'Attendance Hub',
+              subtitle: 'Track real-time daily attendance for students and staff across all branches',
+            ),
           ),
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          StudentAttendanceScreen(),
-          StaffAttendanceScreen(),
+          Container(
+            color: AppTheme.surface,
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: AppTheme.primary,
+              indicatorWeight: 3,
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: AppTheme.textSecondary,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              tabs: const [
+                Tab(
+                  iconMargin: EdgeInsets.zero,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.school_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Student Attendance'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  iconMargin: EdgeInsets.zero,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.badge_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Staff Attendance'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: const [
+                StudentAttendanceScreen(),
+                StaffAttendanceScreen(),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

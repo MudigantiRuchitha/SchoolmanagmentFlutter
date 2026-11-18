@@ -173,6 +173,10 @@ class ApiService {
     } catch (_) {}
   }
 
+  Future<void> changePassword(Map<String, dynamic> data) async {
+    await post(ApiConstants.changePassword, data);
+  }
+
   // =========================================================================
   // 2. Dashboard API
   // =========================================================================
@@ -212,12 +216,20 @@ class ApiService {
   // 3. Branches & Branch Groups
   // =========================================================================
 
-  Future<List<dynamic>> getBranches() async {
-    final res = await get(ApiConstants.branches);
+  Future<List<dynamic>> getBranches([Map<String, dynamic>? params]) async {
+    final res = await get(ApiConstants.branches, params);
     if (res is Map && res['branches'] is List) {
       return res['branches'] as List<dynamic>;
     }
     return [];
+  }
+
+  Future<Map<String, dynamic>> getBranchDetails(int id) async {
+    final res = await get('${ApiConstants.branches}/$id/details');
+    if (res is Map<String, dynamic>) {
+      return res;
+    }
+    return {};
   }
 
   Future<void> createBranch(Map<String, dynamic> data) async {
@@ -256,8 +268,8 @@ class ApiService {
   // 4. Admin Users
   // =========================================================================
 
-  Future<List<dynamic>> getAdmins() async {
-    final res = await get(ApiConstants.admins);
+  Future<List<dynamic>> getAdmins([Map<String, dynamic>? params]) async {
+    final res = await get(ApiConstants.admins, params);
     if (res is Map && res['admins'] is List) {
       return res['admins'] as List<dynamic>;
     }
@@ -547,6 +559,14 @@ class ApiService {
     return [];
   }
 
+  Future<void> createLeaveType(Map<String, dynamic> data) async {
+    await post(ApiConstants.leaveTypes, data);
+  }
+
+  Future<void> deleteLeaveType(int id) async {
+    await delete('${ApiConstants.leaveTypes}/$id');
+  }
+
   Future<void> applyLeave(Map<String, dynamic> data) async {
     await post(ApiConstants.leaves, data);
   }
@@ -570,8 +590,8 @@ class ApiService {
   // 15. Holidays
   // =========================================================================
 
-  Future<List<dynamic>> getHolidays() async {
-    final res = await get(ApiConstants.holidays);
+  Future<List<dynamic>> getHolidays([Map<String, dynamic>? params]) async {
+    final res = await get(ApiConstants.holidays, params);
     if (res is Map && res['holidays'] is List) {
       return res['holidays'] as List<dynamic>;
     }
@@ -594,8 +614,8 @@ class ApiService {
   // 16. Notices
   // =========================================================================
 
-  Future<List<dynamic>> getNotices() async {
-    final res = await get(ApiConstants.notices);
+  Future<List<dynamic>> getNotices([Map<String, dynamic>? params]) async {
+    final res = await get(ApiConstants.notices, params);
     if (res is Map && res['notices'] is List) {
       return res['notices'] as List<dynamic>;
     }
@@ -614,6 +634,10 @@ class ApiService {
       'target_type': targetType,
       'is_important': isImportant,
     });
+  }
+
+  Future<void> updateNotice(int id, Map<String, dynamic> data) async {
+    await put('${ApiConstants.notices}/$id', data);
   }
 
   Future<void> deleteNotice(int id) async {

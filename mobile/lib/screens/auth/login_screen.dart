@@ -23,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     _orgCodeController.text = auth.savedOrgCode ?? 'acs1';
     _usernameController.text = auth.savedUsername ?? 'avniya';
+    _passwordController.text = 'Avniya@123';
   }
 
   @override

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
 import '../../services/storage_service.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 import '../attendance/student_attendance_screen.dart';
 
 class ClassesScreen extends StatefulWidget {
@@ -79,30 +81,53 @@ class _ClassesScreenState extends State<ClassesScreen> {
                 ),
                 const SizedBox(height: 10),
                 if (_branches.isNotEmpty) ...[
-                  DropdownButtonFormField<int?>(
-                    initialValue: selectedBranchId,
-                    decoration: const InputDecoration(labelText: 'Branch / Campus'),
-                    items: _branches.map((b) => DropdownMenuItem<int?>(
-                      value: b['id'] is int ? b['id'] as int : int.tryParse(b['id'].toString()),
-                      child: Text(b['name'] ?? '', style: const TextStyle(fontSize: 13)),
-                    )).toList(),
-                    onChanged: (v) => setDlgState(() => selectedBranchId = v),
-                  ),
+                  Builder(builder: (context) {
+                    final bItems = <DropdownMenuItem<int?>>[];
+                    final seenB = <int>{};
+                    for (final b in _branches) {
+                      final id = b['id'] is int ? b['id'] as int : int.tryParse(b['id']?.toString() ?? '');
+                      if (id != null && seenB.add(id)) {
+                        bItems.add(DropdownMenuItem<int?>(
+                          value: id,
+                          child: Text(b['name'] ?? '', style: const TextStyle(fontSize: 13)),
+                        ));
+                      }
+                    }
+                    final safeBId = bItems.any((i) => i.value == selectedBranchId) ? selectedBranchId : null;
+
+                    return DropdownButtonFormField<int?>(
+                      value: safeBId,
+                      decoration: const InputDecoration(labelText: 'Branch / Campus'),
+                      items: bItems,
+                      onChanged: (v) => setDlgState(() => selectedBranchId = v),
+                    );
+                  }),
                   const SizedBox(height: 10),
                 ],
                 if (_staff.isNotEmpty) ...[
-                  DropdownButtonFormField<int?>(
-                    initialValue: selectedTeacherId,
-                    decoration: const InputDecoration(labelText: 'Class Teacher'),
-                    items: [
+                  Builder(builder: (context) {
+                    final tItems = <DropdownMenuItem<int?>>[
                       const DropdownMenuItem<int?>(value: null, child: Text('No Class Teacher Assigned')),
-                      ..._staff.map((s) => DropdownMenuItem<int?>(
-                        value: s['id'] is int ? s['id'] as int : int.tryParse(s['id'].toString()),
-                        child: Text(s['full_name'] ?? s['name'] ?? '', style: const TextStyle(fontSize: 13)),
-                      )),
-                    ],
-                    onChanged: (v) => setDlgState(() => selectedTeacherId = v),
-                  ),
+                    ];
+                    final seenT = <int?>{null};
+                    for (final s in _staff) {
+                      final id = s['id'] is int ? s['id'] as int : int.tryParse(s['id']?.toString() ?? '');
+                      if (id != null && seenT.add(id)) {
+                        tItems.add(DropdownMenuItem<int?>(
+                          value: id,
+                          child: Text(s['full_name'] ?? s['name'] ?? '', style: const TextStyle(fontSize: 13)),
+                        ));
+                      }
+                    }
+                    final safeTId = tItems.any((i) => i.value == selectedTeacherId) ? selectedTeacherId : null;
+
+                    return DropdownButtonFormField<int?>(
+                      value: safeTId,
+                      decoration: const InputDecoration(labelText: 'Class Teacher'),
+                      items: tItems,
+                      onChanged: (v) => setDlgState(() => selectedTeacherId = v),
+                    );
+                  }),
                   const SizedBox(height: 10),
                 ],
                 Row(
@@ -195,9 +220,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Classes & Sections'),
-      ),
+      appBar: const CustomAppBar(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showClassDialog(),
         icon: const Icon(Icons.school_rounded),
@@ -210,103 +233,113 @@ class _ClassesScreenState extends State<ClassesScreen> {
             ? const Center(child: CircularProgressIndicator())
             : _errorMessage != null
                 ? Center(child: Text(_errorMessage!, style: const TextStyle(color: AppTheme.danger)))
-                : _classes.isEmpty
-                    ? const Center(child: Text('No classes found.'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 84),
-                        itemCount: _classes.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, idx) {
-                          final c = _classes[idx];
+                : ListView(
+                    padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 84),
+                    children: [
+                      const PageHeaderTitle(
+                        title: 'Classes & Sections',
+                        subtitle: 'Manage grade levels, class rosters, and assigned class teachers',
+                      ),
+                      if (_classes.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(child: Text('No classes found.')),
+                        )
+                      else
+                        ..._classes.map((c) {
                           final studentCount = c['student_count'] ?? c['students_count'] ?? 0;
 
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primaryLight,
-                                          borderRadius: BorderRadius.circular(8),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.primaryLight,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.meeting_room_rounded, color: AppTheme.primary),
                                         ),
-                                        child: const Icon(Icons.meeting_room_rounded, color: AppTheme.primary),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '${c['name']} - Section ${c['section'] ?? ""}'.trim(),
+                                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                              ),
+                                              if (c['branch_name'] != null)
+                                                Text(c['branch_name'], style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_outlined, size: 18),
+                                          onPressed: () => _showClassDialog(c),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
+                                          onPressed: () => _deleteClass(c),
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(height: 20),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
                                           children: [
+                                            const Icon(Icons.person_outline_rounded, size: 16, color: AppTheme.textMuted),
+                                            const SizedBox(width: 4),
                                             Text(
-                                              '${c['name']} - Section ${c['section'] ?? ""}'.trim(),
-                                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                                              c['class_teacher_name'] ?? 'No class teacher',
+                                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                                             ),
-                                            if (c['branch_name'] != null)
-                                              Text(c['branch_name'], style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                                           ],
                                         ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_outlined, size: 18),
-                                        onPressed: () => _showClassDialog(c),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
-                                        onPressed: () => _deleteClass(c),
-                                      ),
-                                    ],
-                                  ),
-                                  const Divider(height: 20),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.person_outline_rounded, size: 16, color: AppTheme.textMuted),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            c['class_teacher_name'] ?? 'No class teacher',
-                                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.primaryLight,
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
-                                        ],
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primaryLight,
-                                          borderRadius: BorderRadius.circular(12),
+                                          child: Text(
+                                            '$studentCount Students',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                          ),
                                         ),
-                                        child: Text(
-                                          '$studentCount Students',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primary),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.how_to_reg_rounded, size: 16),
-                                      label: const Text('Take Class Attendance', style: TextStyle(fontSize: 12)),
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (_) => const StudentAttendanceScreen()),
-                                        );
-                                      },
+                                      ],
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 10),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.how_to_reg_rounded, size: 16),
+                                        label: const Text('Take Class Attendance', style: TextStyle(fontSize: 12)),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (_) => const StudentAttendanceScreen()),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
-                        },
-                      ),
+                        }),
+                    ],
+                  ),
       ),
     );
   }

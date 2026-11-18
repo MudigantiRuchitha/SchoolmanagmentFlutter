@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/students_provider.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 
 class StudentAttendanceScreen extends StatefulWidget {
   const StudentAttendanceScreen({super.key});
@@ -60,7 +62,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     final records = att.studentRecords;
     final summary = att.studentSummary;
 
-    return RefreshIndicator(
+    final content = RefreshIndicator(
       onRefresh: () => att.fetchStudentAttendance(),
       color: AppTheme.primary,
       child: Column(
@@ -115,30 +117,40 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<int?>(
-                        initialValue: att.selectedClassId,
-                        decoration: const InputDecoration(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          prefixIcon: Icon(Icons.meeting_room_rounded, size: 18),
-                        ),
-                        hint: const Text('All Classes & Sections', style: TextStyle(fontSize: 13)),
-                        isExpanded: true,
-                        items: [
+                      child: Builder(builder: (context) {
+                        final classItems = <DropdownMenuItem<int?>>[
                           const DropdownMenuItem<int?>(
                             value: null,
                             child: Text('All Classes & Sections', style: TextStyle(fontSize: 13)),
                           ),
-                          ...stuProv.classes.map((c) {
-                            final id = c['id'] is int ? c['id'] : int.tryParse(c['id'].toString());
+                        ];
+                        final seenC = <int?>{null};
+                        for (final c in stuProv.classes) {
+                          final id = c['id'] is int ? c['id'] : int.tryParse(c['id']?.toString() ?? '');
+                          if (id != null && seenC.add(id)) {
                             final name = '${c['name'] ?? ''} ${c['section'] ?? ''}'.trim();
-                            return DropdownMenuItem<int?>(
-                              value: id,
-                              child: Text(name.isEmpty ? 'Class #$id' : name, style: const TextStyle(fontSize: 13)),
+                            classItems.add(
+                              DropdownMenuItem<int?>(
+                                value: id,
+                                child: Text(name.isEmpty ? 'Class #$id' : name, style: const TextStyle(fontSize: 13)),
+                              ),
                             );
-                          }),
-                        ],
-                        onChanged: (val) => att.setClassFilter(val),
-                      ),
+                          }
+                        }
+                        final safeClassId = classItems.any((i) => i.value == att.selectedClassId) ? att.selectedClassId : null;
+
+                        return DropdownButtonFormField<int?>(
+                          value: safeClassId,
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            prefixIcon: Icon(Icons.meeting_room_rounded, size: 18),
+                          ),
+                          hint: const Text('All Classes & Sections', style: TextStyle(fontSize: 13)),
+                          isExpanded: true,
+                          items: classItems,
+                          onChanged: (val) => att.setClassFilter(val),
+                        );
+                      }),
                     ),
                   ],
                 ),
@@ -350,6 +362,28 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
         ],
       ),
     );
+
+    if (Navigator.canPop(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: const CustomAppBar(),
+        body: Column(
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 14),
+              child: const PageHeaderTitle(
+                title: 'Student Attendance',
+                subtitle: 'Record and update daily attendance statuses for enrolled students',
+              ),
+            ),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
+    return content;
   }
 
   Widget _buildStatusBtn({

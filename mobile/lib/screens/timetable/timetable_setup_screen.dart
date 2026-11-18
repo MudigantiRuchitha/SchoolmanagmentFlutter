@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
 import '../../services/storage_service.dart';
+import '../../widgets/custom_app_bar.dart';
+import '../../widgets/page_header_title.dart';
 
 class TimetableSetupScreen extends StatefulWidget {
   const TimetableSetupScreen({super.key});
@@ -156,18 +158,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Timetable & Periods Setup'),
-        actions: [
-          TextButton.icon(
-            icon: _isSaving
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.save_rounded, size: 18),
-            label: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: _isSaving ? null : _saveTimetable,
-          ),
-        ],
-      ),
+      appBar: const CustomAppBar(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddSlotDialog,
         icon: const Icon(Icons.add_rounded),
@@ -181,6 +172,23 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
               child: ListView(
                 padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 84),
                 children: [
+                  PageHeaderTitle(
+                    title: 'Timetable Setup',
+                    subtitle: 'Configure school bells, period schedules, and daily attendance tracking modes',
+                    trailing: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: _isSaving
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.save_rounded, size: 16),
+                      label: const Text('Save Setup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                      onPressed: _isSaving ? null : _saveTimetable,
+                    ),
+                  ),
                   // Attendance Mode Configuration Card
                   Card(
                     child: Padding(
