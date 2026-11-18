@@ -6,7 +6,9 @@ import '../../config/app_theme.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/students_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/admin_ui.dart';
+import '../../widgets/custom_app_bar.dart';
 
 class StudentAttendanceScreen extends StatefulWidget {
   const StudentAttendanceScreen({super.key});
@@ -18,14 +20,13 @@ class StudentAttendanceScreen extends StatefulWidget {
 
 class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   final TextEditingController _searchController = TextEditingController();
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
   List<Map<String, String>> _periodOptions = [];
   String _statusFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _api = context.read<ApiService>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StudentsProvider>().initFilters();
       context.read<AttendanceProvider>().fetchStudentAttendance();
@@ -141,7 +142,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       return matchesSearch && matchesStatus;
     }).toList();
 
-    return RefreshIndicator(
+    final body = RefreshIndicator(
       onRefresh: () => att.fetchStudentAttendance(),
       color: AppTheme.primary,
       child: Column(
@@ -781,6 +782,18 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
           ),
         ],
       ),
+    );
+
+    if (Navigator.canPop(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: const CustomAppBar(),
+        body: body,
+      );
+    }
+    return Material(
+      color: Colors.transparent,
+      child: body,
     );
   }
 

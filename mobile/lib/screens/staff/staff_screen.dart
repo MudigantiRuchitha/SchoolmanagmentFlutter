@@ -8,6 +8,7 @@ import '../../providers/staff_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/storage_service.dart';
 import '../../widgets/admin_ui.dart';
+import '../../widgets/custom_app_bar.dart';
 
 class StaffScreen extends StatefulWidget {
   const StaffScreen({super.key});
@@ -18,14 +19,13 @@ class StaffScreen extends StatefulWidget {
 
 class _StaffScreenState extends State<StaffScreen> {
   final _searchController = TextEditingController();
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
   List<dynamic> _branches = [];
   String _statusFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _api = ApiService(StorageService());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StaffProvider>().fetchStaff();
       _loadBranches();
@@ -262,6 +262,8 @@ class _StaffScreenState extends State<StaffScreen> {
     }).toList();
 
     return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
       body: RefreshIndicator(
         onRefresh: () => staffProv.fetchStaff(),
         color: AppTheme.primary,

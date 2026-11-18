@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
 
 class AcademicDataScreen extends StatefulWidget {
   const AcademicDataScreen({super.key});
@@ -12,7 +13,7 @@ class AcademicDataScreen extends StatefulWidget {
 }
 
 class _AcademicDataScreenState extends State<AcademicDataScreen> {
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
 
   String _entityType = 'student'; // 'student' or 'staff'
   List<dynamic> _years = [];
@@ -28,7 +29,6 @@ class _AcademicDataScreenState extends State<AcademicDataScreen> {
   @override
   void initState() {
     super.initState();
-    _api = context.read<ApiService>();
     _loadInitialData();
   }
 

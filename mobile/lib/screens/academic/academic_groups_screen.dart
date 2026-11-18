@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/admin_ui.dart';
 
 class AcademicGroupsScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class AcademicGroupsScreen extends StatefulWidget {
 }
 
 class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
   List<dynamic> _groups = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -21,7 +22,6 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
   @override
   void initState() {
     super.initState();
-    _api = context.read<ApiService>();
     _loadGroups();
   }
 

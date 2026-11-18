@@ -6,6 +6,7 @@ import '../../config/app_theme.dart';
 import '../../models/attendance_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/students_provider.dart';
+import '../../widgets/custom_app_bar.dart';
 
 class StaffAttendanceScreen extends StatefulWidget {
   const StaffAttendanceScreen({super.key});
@@ -208,9 +209,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
       return matchesSearch && matchesStatus;
     }).toList();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Staff Attendance')),
-      body: RefreshIndicator(
+    final body = RefreshIndicator(
         onRefresh: () => att.fetchStaffAttendance(),
         color: AppTheme.primary,
         child: Column(
@@ -859,7 +858,18 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
             ),
           ],
         ),
-      ),
+      );
+
+    if (Navigator.canPop(context)) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: const CustomAppBar(),
+        body: body,
+      );
+    }
+    return Material(
+      color: Colors.transparent,
+      child: body,
     );
   }
 

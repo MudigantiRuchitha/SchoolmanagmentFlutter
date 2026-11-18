@@ -13,7 +13,7 @@ class BranchGroupsScreen extends StatefulWidget {
 }
 
 class _BranchGroupsScreenState extends State<BranchGroupsScreen> {
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
   List<dynamic> _groups = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -21,7 +21,6 @@ class _BranchGroupsScreenState extends State<BranchGroupsScreen> {
   @override
   void initState() {
     super.initState();
-    _api = ApiService(StorageService());
     _loadGroups();
   }
 

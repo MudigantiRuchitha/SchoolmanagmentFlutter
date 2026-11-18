@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/admin_ui.dart';
 import '../attendance/student_attendance_screen.dart';
 
@@ -14,7 +15,7 @@ class ClassesScreen extends StatefulWidget {
 }
 
 class _ClassesScreenState extends State<ClassesScreen> {
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
   List<dynamic> _classes = [];
   List<dynamic> _branches = [];
   List<dynamic> _staff = [];
@@ -26,7 +27,6 @@ class _ClassesScreenState extends State<ClassesScreen> {
   @override
   void initState() {
     super.initState();
-    _api = context.read<ApiService>();
     _loadData();
   }
 

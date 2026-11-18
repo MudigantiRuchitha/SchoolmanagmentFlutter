@@ -14,7 +14,7 @@ class AttendanceHubScreen extends StatefulWidget {
 }
 
 class _AttendanceHubScreenState extends State<AttendanceHubScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  TabController? _tabController;
 
   @override
   void initState() {
@@ -24,12 +24,14 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> with SingleTi
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final tabCtrl = _tabController ?? TabController(length: 2, vsync: this);
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
@@ -46,7 +48,7 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> with SingleTi
           Container(
             color: AppTheme.surface,
             child: TabBar(
-              controller: _tabController,
+              controller: tabCtrl,
               indicatorColor: AppTheme.primary,
               indicatorWeight: 3,
               labelColor: AppTheme.primary,
@@ -80,7 +82,7 @@ class _AttendanceHubScreenState extends State<AttendanceHubScreen> with SingleTi
           ),
           Expanded(
             child: TabBarView(
-              controller: _tabController,
+              controller: tabCtrl,
               children: const [
                 StudentAttendanceScreen(),
                 StaffAttendanceScreen(),

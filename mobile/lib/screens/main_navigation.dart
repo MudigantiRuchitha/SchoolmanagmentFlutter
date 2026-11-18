@@ -208,7 +208,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _buildSectionHeader('OVERVIEW'),
             _buildDrawerTile(
               Icons.dashboard_rounded,
-              '1. Dashboard',
+              'Dashboard',
               () => _navigateFromDrawer(const DashboardScreen(), 0),
             ),
 
@@ -216,22 +216,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _buildSectionHeader('ORGANISATION'),
             _buildDrawerTile(
               Icons.business_rounded,
-              '2. Branches',
+              'Branches',
               () => _navigateFromDrawer(const BranchesScreen()),
             ),
             _buildDrawerTile(
               Icons.workspaces_rounded,
-              '3. Branch Groups',
+              'Branch Groups',
               () => _navigateFromDrawer(const BranchGroupsScreen()),
             ),
             _buildDrawerTile(
               Icons.admin_panel_settings_rounded,
-              '4. Admin Users',
+              'Admin Users',
               () => _navigateFromDrawer(const AdminUsersScreen()),
             ),
             _buildDrawerTile(
               Icons.settings_rounded,
-              '5. Settings',
+              'Settings',
               () => _navigateFromDrawer(const SettingsScreen()),
             ),
 
@@ -239,7 +239,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _buildSectionHeader('ACADEMIC ADMINISTRATOR'),
             _buildDrawerTile(
               Icons.menu_book_rounded,
-              '6. Academic Data',
+              'Academic Data',
               () => _navigateFromDrawer(const AcademicDataScreen()),
             ),
 
@@ -247,22 +247,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _buildSectionHeader('ACADEMIC'),
             _buildDrawerTile(
               Icons.category_rounded,
-              '7. Academic Groups',
+              'Academic Groups',
               () => _navigateFromDrawer(const AcademicGroupsScreen()),
             ),
             _buildDrawerTile(
               Icons.meeting_room_rounded,
-              '8. Classes & Sections',
+              'Classes & Sections',
               () => _navigateFromDrawer(const ClassesScreen()),
             ),
             _buildDrawerTile(
               Icons.people_alt_rounded,
-              '9. Students Directory',
+              'Students Directory',
               () => _navigateFromDrawer(const StudentsScreen(), 2),
             ),
             _buildDrawerTile(
               Icons.badge_rounded,
-              '10. Staff Directory',
+              'Staff Directory',
               () => _navigateFromDrawer(const StaffScreen(), 3),
             ),
 
@@ -270,17 +270,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _buildSectionHeader('ATTENDANCE'),
             _buildDrawerTile(
               Icons.schedule_rounded,
-              '11. Timetable Setup',
+              'Timetable Setup',
               () => _navigateFromDrawer(const TimetableSetupScreen()),
             ),
             _buildDrawerTile(
               Icons.how_to_reg_rounded,
-              '12. Student Attendance',
+              'Student Attendance',
               () => _navigateFromDrawer(const StudentAttendanceScreen(), 1),
             ),
             _buildDrawerTile(
               Icons.access_time_filled_rounded,
-              '13. Staff Attendance',
+              'Staff Attendance',
               () => _navigateFromDrawer(const StaffAttendanceScreen()),
             ),
 
@@ -288,18 +288,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _buildSectionHeader('MANAGEMENT'),
             _buildDrawerTile(
               Icons.beach_access_rounded,
-              '14. Leave Management',
+              'Leave Management',
               () => _navigateFromDrawer(const LeaveApprovalsScreen(), 4),
               badgeCount: leaves.pendingCount,
             ),
             _buildDrawerTile(
               Icons.calendar_month_rounded,
-              '15. Holidays Calendar',
+              'Holidays Calendar',
               () => _navigateFromDrawer(const HolidaysScreen()),
             ),
             _buildDrawerTile(
               Icons.campaign_rounded,
-              '16. Notices & Circulars',
+              'Notices & Circulars',
               () => _navigateFromDrawer(const NoticesScreen()),
             ),
 

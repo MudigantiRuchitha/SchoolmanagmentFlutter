@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
 import '../../widgets/admin_ui.dart';
 
 class TimetableSetupScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class TimetableSetupScreen extends StatefulWidget {
 }
 
 class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
-  late final ApiService _api;
+  final ApiService _api = ApiService(StorageService());
   List<Map<String, dynamic>> _slots = [];
   final TextEditingController _morningNameController = TextEditingController(
     text: 'Morning (AM)',
@@ -41,7 +42,6 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
   @override
   void initState() {
     super.initState();
-    _api = context.read<ApiService>();
     _loadTimetable();
   }
 

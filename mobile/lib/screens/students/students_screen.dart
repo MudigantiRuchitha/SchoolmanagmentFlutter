@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../providers/students_provider.dart';
 import '../../widgets/admin_ui.dart';
+import '../../widgets/custom_app_bar.dart';
 import 'student_detail_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
@@ -43,7 +44,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
       return true;
     }).toList();
 
-    return RefreshIndicator(
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
+      body: RefreshIndicator(
       onRefresh: () => stuProv.fetchStudents(),
       color: AppTheme.primary,
       child: Column(
@@ -400,6 +404,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
