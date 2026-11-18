@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
 import '../../services/api_service.dart';
-import '../../services/storage_service.dart';
-import '../../widgets/custom_app_bar.dart';
-import '../../widgets/page_header_title.dart';
+import '../../widgets/admin_ui.dart';
 
 class AcademicGroupsScreen extends StatefulWidget {
   const AcademicGroupsScreen({super.key});
@@ -21,7 +21,7 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
   @override
   void initState() {
     super.initState();
-    _api = ApiService(StorageService());
+    _api = context.read<ApiService>();
     _loadGroups();
   }
 
@@ -59,18 +59,27 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
           children: [
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Group Name *', hintText: 'e.g. Primary Wing (Grades 1-5)'),
+              decoration: const InputDecoration(
+                labelText: 'Group Name *',
+                hintText: 'e.g. Primary Wing (Grades 1-5)',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: descCtrl,
-              decoration: const InputDecoration(labelText: 'Description', hintText: 'Curriculum or wing notes'),
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Curriculum or wing notes',
+              ),
               maxLines: 2,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -108,7 +117,10 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
         title: const Text('Delete Academic Group?'),
         content: Text('Remove "${group['name']}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.pop(ctx, true),
@@ -124,7 +136,8 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
         _loadGroups();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
     }
   }
@@ -132,8 +145,7 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: const CustomAppBar(),
+      appBar: AppBar(title: const Text('Academic Groups')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showGroupDialog(),
         icon: const Icon(Icons.category_rounded),
@@ -142,52 +154,158 @@ class _AcademicGroupsScreenState extends State<AcademicGroupsScreen> {
       body: RefreshIndicator(
         onRefresh: _loadGroups,
         color: AppTheme.primary,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const PageHeaderTitle(
-              title: 'Academic Groups',
-              subtitle: 'Organise classes into streams, wings, or academic divisions',
-            ),
-            if (_isLoading)
-              const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
-            else if (_errorMessage != null)
-              Center(child: Padding(padding: const EdgeInsets.all(40), child: Text(_errorMessage!, style: const TextStyle(color: AppTheme.danger))))
-            else if (_groups.isEmpty)
-              const Center(child: Padding(padding: EdgeInsets.all(40), child: Text('No academic groups created.')))
-            else
-              ..._groups.map((g) {
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryLight,
-                        borderRadius: BorderRadius.circular(8),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.cloud_off_rounded,
+                        color: AppTheme.danger,
+                        size: 36,
                       ),
-                      child: const Icon(Icons.category_rounded, color: AppTheme.primary),
-                    ),
-                    title: Text(g['name'] ?? 'Academic Group', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(g['description'] ?? 'No description provided'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          onPressed: () => _showGroupDialog(g),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Academic groups could not be loaded.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppTheme.danger),
-                          onPressed: () => _deleteGroup(g),
-                        ),
-                      ],
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _loadGroups,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Try again'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : _groups.isEmpty
+            ? const Center(child: Text('No academic groups created.'))
+            : ListView(
+                padding: const EdgeInsets.all(14),
+                children: [
+                  const AdminPageHeading(
+                    title: 'Academic Groups',
+                    subtitle: 'Organize classes by academic level and year.',
+                    horizontalPadding: 0,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '${_groups.length} groups configured',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                );
-              }),
-          ],
-        ),
+                  ..._groups.map((rawGroup) {
+                    final g = rawGroup as Map<String, dynamic>;
+                    final classCount =
+                        g['class_count'] ?? g['classes_count'] ?? 0;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(9),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryLight,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.category_rounded,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    g['name']?.toString() ?? 'Academic Group',
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Edit group',
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 19,
+                                  ),
+                                  onPressed: () => _showGroupDialog(g),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete group',
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 19,
+                                    color: AppTheme.danger,
+                                  ),
+                                  onPressed: () => _deleteGroup(g),
+                                ),
+                              ],
+                            ),
+                            if ((g['description'] ?? '')
+                                .toString()
+                                .isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                g['description'].toString(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryLight,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$classCount Classes',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
       ),
     );
   }

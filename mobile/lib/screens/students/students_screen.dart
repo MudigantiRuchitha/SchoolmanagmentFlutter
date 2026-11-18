@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
 import '../../providers/students_provider.dart';
-import '../../widgets/custom_app_bar.dart';
-import '../../widgets/page_header_title.dart';
+import '../../widgets/admin_ui.dart';
 import 'student_detail_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
@@ -15,6 +15,7 @@ class StudentsScreen extends StatefulWidget {
 
 class _StudentsScreenState extends State<StudentsScreen> {
   final _searchController = TextEditingController();
+  String _statusFilter = 'all';
 
   @override
   void initState() {
@@ -36,24 +37,22 @@ class _StudentsScreenState extends State<StudentsScreen> {
   Widget build(BuildContext context) {
     final stuProv = context.watch<StudentsProvider>();
     final students = stuProv.students;
+    final visibleStudents = students.where((student) {
+      if (_statusFilter == 'active') return student.isActive;
+      if (_statusFilter == 'inactive') return !student.isActive;
+      return true;
+    }).toList();
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: Navigator.canPop(context) ? const CustomAppBar() : null,
-      body: RefreshIndicator(
-        onRefresh: () => stuProv.fetchStudents(),
-        color: AppTheme.primary,
-        child: Column(
-          children: [
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 14),
-              child: const PageHeaderTitle(
-                title: 'Students',
-                subtitle: 'Manage student enrollment, profiles, and class allocations',
-              ),
-            ),
-            // Search & Filter Toolbar
+    return RefreshIndicator(
+      onRefresh: () => stuProv.fetchStudents(),
+      color: AppTheme.primary,
+      child: Column(
+        children: [
+          const AdminPageHeading(
+            title: 'Students',
+            subtitle: 'View and manage student records across your school.',
+          ),
+          // Search & Filter Toolbar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: AppTheme.surface,
@@ -73,7 +72,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
                             },
                           )
                         : null,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                   onChanged: (v) => stuProv.setSearch(v),
                 ),
@@ -81,34 +83,171 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Builder(builder: (context) {
-                        final classItems = <DropdownMenuItem<int?>>[
-                          const DropdownMenuItem(value: null, child: Text('All Classes', style: TextStyle(fontSize: 13))),
-                        ];
-                        final seenC = <int?>{null};
-                        for (final c in stuProv.classes) {
-                          final id = c['id'] is int ? c['id'] : int.tryParse(c['id']?.toString() ?? '');
-                          if (id != null && seenC.add(id)) {
-                            final name = '${c['name'] ?? ''} ${c['section'] ?? ''}'.trim();
-                            classItems.add(DropdownMenuItem(value: id, child: Text(name.isEmpty ? 'Class #$id' : name, style: const TextStyle(fontSize: 13))));
-                          }
-                        }
-                        final safeClassId = classItems.any((i) => i.value == stuProv.selectedClassId) ? stuProv.selectedClassId : null;
-
-                        return DropdownButtonFormField<int?>(
-                          value: safeClassId,
-                          decoration: const InputDecoration(
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            prefixIcon: Icon(Icons.meeting_room_rounded, size: 18),
+                      child: DropdownButtonFormField<int?>(
+                        initialValue: stuProv.selectedBranchId,
+                        decoration: const InputDecoration(
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
                           ),
-                          hint: const Text('Filter by Class', style: TextStyle(fontSize: 13)),
-                          isExpanded: true,
-                          items: classItems,
-                          onChanged: (val) => stuProv.setClassFilter(val),
-                        );
-                      }),
+                          prefixIcon: Icon(Icons.business_outlined, size: 17),
+                        ),
+                        hint: const Text(
+                          'All Branches',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        isExpanded: true,
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text(
+                              'All Branches',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          ...stuProv.branches.map((branch) {
+                            final id = branch['id'] is int
+                                ? branch['id']
+                                : int.tryParse(branch['id'].toString());
+                            return DropdownMenuItem(
+                              value: id,
+                              child: Text(
+                                branch['name']?.toString() ?? 'Branch',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }),
+                        ],
+                        onChanged: (val) => stuProv.setBranchFilter(val),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int?>(
+                        initialValue: stuProv.selectedClassId,
+                        decoration: const InputDecoration(
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.meeting_room_rounded,
+                            size: 17,
+                          ),
+                        ),
+                        hint: const Text(
+                          'All Classes',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        isExpanded: true,
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text(
+                              'All Classes',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          ...stuProv.classes.map((c) {
+                            final id = c['id'] is int
+                                ? c['id']
+                                : int.tryParse(c['id'].toString());
+                            final name =
+                                '${c['name'] ?? ''} ${c['section'] ?? ''}'
+                                    .trim();
+                            return DropdownMenuItem(
+                              value: id,
+                              child: Text(
+                                name,
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }),
+                        ],
+                        onChanged: (val) => stuProv.setClassFilter(val),
+                      ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _statusFilter,
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    prefixIcon: Icon(Icons.toggle_on_outlined, size: 18),
+                  ),
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('All Statuses')),
+                    DropdownMenuItem(value: 'active', child: Text('Active')),
+                    DropdownMenuItem(
+                      value: 'inactive',
+                      child: Text('Inactive'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _statusFilter = value);
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(
+            height: 88,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              scrollDirection: Axis.horizontal,
+              children: [
+                SizedBox(
+                  width: 158,
+                  child: AdminMetricCard(
+                    label: 'Total Students',
+                    value: '${students.length}',
+                    icon: Icons.people_alt_rounded,
+                    color: AppTheme.primary,
+                    backgroundColor: AppTheme.primaryLight,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 158,
+                  child: AdminMetricCard(
+                    label: 'Male',
+                    value:
+                        '${students.where((s) => (s.gender ?? '').toLowerCase() == 'male').length}',
+                    icon: Icons.male_rounded,
+                    color: AppTheme.secondary,
+                    backgroundColor: AppTheme.secondaryLight,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 158,
+                  child: AdminMetricCard(
+                    label: 'Female',
+                    value:
+                        '${students.where((s) => (s.gender ?? '').toLowerCase() == 'female').length}',
+                    icon: Icons.female_rounded,
+                    color: AppTheme.warning,
+                    backgroundColor: AppTheme.warningLight,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 158,
+                  child: AdminMetricCard(
+                    label: 'Active Students',
+                    value: '${students.where((s) => s.isActive).length}',
+                    icon: Icons.check_circle_outline_rounded,
+                    color: AppTheme.success,
+                    backgroundColor: AppTheme.successLight,
+                  ),
                 ),
               ],
             ),
@@ -121,8 +260,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${students.length} Students Listed',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                  '${visibleStudents.length} Students Listed',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -132,70 +275,131 @@ class _StudentsScreenState extends State<StudentsScreen> {
           Expanded(
             child: stuProv.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : students.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.people_outline_rounded, size: 48, color: AppTheme.textMuted),
-                            SizedBox(height: 12),
-                            Text('No students matched your query.', style: TextStyle(color: AppTheme.textSecondary)),
-                          ],
+                : visibleStudents.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.people_outline_rounded,
+                          size: 48,
+                          color: AppTheme.textMuted,
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(left: 14, right: 14, bottom: 80),
-                        itemCount: students.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (ctx, idx) {
-                          final student = students[idx];
-                          return Card(
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                              leading: CircleAvatar(
-                                radius: 22,
-                                backgroundColor: AppTheme.primaryLight,
-                                child: Text(
-                                  student.fullName.isNotEmpty ? student.fullName[0].toUpperCase() : 'S',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary, fontSize: 16),
+                        SizedBox(height: 12),
+                        Text(
+                          'No students matched your query.',
+                          style: TextStyle(color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.only(
+                      left: 14,
+                      right: 14,
+                      bottom: 80,
+                    ),
+                    itemCount: visibleStudents.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (ctx, idx) {
+                      final student = visibleStudents[idx];
+                      return Card(
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          leading: CircleAvatar(
+                            radius: 22,
+                            backgroundColor: AppTheme.primaryLight,
+                            child: Text(
+                              student.fullName.isNotEmpty
+                                  ? student.fullName[0].toUpperCase()
+                                  : 'S',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primary,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            student.fullName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 2),
+                              Text(
+                                'Adm: ${student.admissionNo ?? "—"} • Roll: ${student.rollNo ?? "—"}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textSecondary,
                                 ),
                               ),
-                              title: Text(
-                                student.fullName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textPrimary),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Adm: ${student.admissionNo ?? "—"} • Roll: ${student.rollNo ?? "—"}',
-                                    style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              if (student.className != null)
+                                Text(
+                                  '${student.className} ${student.section ?? ""}'
+                                      .trim(),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.primary,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  if (student.className != null)
-                                    Text(
-                                      '${student.className} ${student.section ?? ""}'.trim(),
-                                      style: const TextStyle(fontSize: 11, color: AppTheme.primary, fontWeight: FontWeight.w600),
-                                    ),
-                                ],
-                              ),
-                              trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => StudentDetailScreen(student: student),
+                                ),
+                              if (student.branchName != null ||
+                                  student.gender != null)
+                                Text(
+                                  [
+                                    if (student.gender != null &&
+                                        student.gender!.isNotEmpty)
+                                      student.gender!,
+                                    if (student.branchName != null &&
+                                        student.branchName!.isNotEmpty)
+                                      student.branchName!,
+                                  ].join(' • '),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.textMuted,
                                   ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                                ),
+                              Text(
+                                student.isActive ? 'Active' : 'Inactive',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: student.isActive
+                                      ? AppTheme.success
+                                      : AppTheme.danger,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          trailing: const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppTheme.textMuted,
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    StudentDetailScreen(student: student),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 }

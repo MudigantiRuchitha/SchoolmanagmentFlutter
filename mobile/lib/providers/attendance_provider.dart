@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../models/attendance_model.dart';
 import '../models/dashboard_stats_model.dart';
 import '../services/api_service.dart';
@@ -21,9 +22,12 @@ class AttendanceProvider extends ChangeNotifier {
   String? _selectedRoleType;
 
   // State
-  bool _isLoading = false;
+  bool _isStudentLoading = false;
+  bool _isStaffLoading = false;
   bool _isSaving = false;
   String? _errorMessage;
+  String? _studentErrorMessage;
+  String? _staffErrorMessage;
   String? _successMessage;
 
   // Tracks unsaved changes locally: studentId -> status
@@ -44,14 +48,19 @@ class AttendanceProvider extends ChangeNotifier {
   AttendanceSummary? get staffSummary => _staffSummary;
   String? get selectedRoleType => _selectedRoleType;
 
-  bool get isLoading => _isLoading;
+  bool get isLoading => _isStudentLoading || _isStaffLoading;
+  bool get isStudentLoading => _isStudentLoading;
+  bool get isStaffLoading => _isStaffLoading;
   bool get isSaving => _isSaving;
   String? get errorMessage => _errorMessage;
+  String? get studentErrorMessage => _studentErrorMessage;
+  String? get staffErrorMessage => _staffErrorMessage;
   String? get successMessage => _successMessage;
   bool get hasUnsavedStudentChanges => _studentStatusChanges.isNotEmpty;
   bool get hasUnsavedStaffChanges => _staffStatusChanges.isNotEmpty;
 
-  String get formattedSelectedDate => DateFormat('yyyy-MM-dd').format(_selectedDate);
+  String get formattedSelectedDate =>
+      DateFormat('yyyy-MM-dd').format(_selectedDate);
 
   void setDate(DateTime date) {
     _selectedDate = date;
@@ -83,8 +92,8 @@ class AttendanceProvider extends ChangeNotifier {
   // ----------------- Student Attendance -----------------
 
   Future<void> fetchStudentAttendance() async {
-    _isLoading = true;
-    _errorMessage = null;
+    _isStudentLoading = true;
+    _studentErrorMessage = null;
     _studentStatusChanges.clear();
     notifyListeners();
 
@@ -98,7 +107,10 @@ class AttendanceProvider extends ChangeNotifier {
 
       if (res['records'] is List) {
         _studentRecords = (res['records'] as List)
-            .map((r) => StudentAttendanceRecord.fromJson(r as Map<String, dynamic>))
+            .map(
+              (r) =>
+                  StudentAttendanceRecord.fromJson(r as Map<String, dynamic>),
+            )
             .toList();
       } else {
         _studentRecords = [];
@@ -108,9 +120,9 @@ class AttendanceProvider extends ChangeNotifier {
         _studentSummary = AttendanceSummary.fromJson(res['summary']);
       }
     } catch (e) {
-      _errorMessage = e.toString();
+      _studentErrorMessage = e.toString();
     } finally {
-      _isLoading = false;
+      _isStudentLoading = false;
       notifyListeners();
     }
   }
@@ -175,8 +187,8 @@ class AttendanceProvider extends ChangeNotifier {
   // ----------------- Staff Attendance -----------------
 
   Future<void> fetchStaffAttendance() async {
-    _isLoading = true;
-    _errorMessage = null;
+    _isStaffLoading = true;
+    _staffErrorMessage = null;
     _staffStatusChanges.clear();
     notifyListeners();
 
@@ -189,7 +201,9 @@ class AttendanceProvider extends ChangeNotifier {
 
       if (res['records'] is List) {
         _staffRecords = (res['records'] as List)
-            .map((r) => StaffAttendanceRecord.fromJson(r as Map<String, dynamic>))
+            .map(
+              (r) => StaffAttendanceRecord.fromJson(r as Map<String, dynamic>),
+            )
             .toList();
       } else {
         _staffRecords = [];
@@ -199,9 +213,9 @@ class AttendanceProvider extends ChangeNotifier {
         _staffSummary = AttendanceSummary.fromJson(res['summary']);
       }
     } catch (e) {
-      _errorMessage = e.toString();
+      _staffErrorMessage = e.toString();
     } finally {
-      _isLoading = false;
+      _isStaffLoading = false;
       notifyListeners();
     }
   }
@@ -289,4 +303,3 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 }
-
